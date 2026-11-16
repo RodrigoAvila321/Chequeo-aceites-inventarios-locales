@@ -1,0 +1,55 @@
+name: Compilar ejecutable Windows
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+
+      - name: Pruebas
+        run: python -m pytest -q tests
+
+      - name: Generar ícono
+        run: python -c "from control_aceites.tema import guardar_ico; guardar_ico('icono.ico')"
+
+      - name: Compilar ControlAceites.exe
+        run: pyinstaller --noconfirm --onefile --windowed --icon icono.ico --name ControlAceites main.py
+
+      - name: Publicar ejecutable (artefacto)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ControlAceites-windows
+          path: dist/ControlAceites.exe
+          if-no-files-found: error
+
+      - name: Leer versión
+        id: ver
+        shell: bash
+        run: echo "v=$(python -c 'from control_aceites import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Publicar versión (GitHub Release)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Control de Aceites v${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          files: dist/ControlAceites.exe
+          make_latest: true
+          body: |
+            Descargue **ControlAceites.exe** (abajo, en «Assets») y ábralo con doble clic.
+            Sus datos se guardan en Documentos\ControlAceites.
