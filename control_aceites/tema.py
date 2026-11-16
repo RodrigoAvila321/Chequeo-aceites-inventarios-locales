@@ -130,6 +130,12 @@ def dibujar(nombre: str, color="#FFFFFF") -> Image.Image:
             d.rectangle((44, y - 9, 212, y + 9), fill=c)
             d.rectangle((52, y - 3, 204, y + 3), fill=T)
         d.ellipse((150, 32, 178, 50), fill=T)
+    elif nombre == "recepcion":
+        d.rounded_rectangle((70, 92, 210, 240), radius=18, fill=c)               # tarro
+        for y in (140, 192):
+            d.rectangle((70, y - 3, 210, y + 3), fill=T)
+        d.rectangle((26, 18, 62, 120), fill=c)                                   # flecha de entrada
+        d.polygon([(4, 112), (84, 112), (44, 168)], fill=c)
     elif nombre == "camion":
         d.rounded_rectangle((14, 66, 164, 184), radius=16, fill=c)        # estanque
         d.ellipse((52, 98, 92, 150), fill=T)

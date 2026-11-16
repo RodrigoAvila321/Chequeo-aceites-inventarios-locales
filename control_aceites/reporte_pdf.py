@@ -33,6 +33,8 @@ _E = dict(
     peqb=ParagraphStyle("pb", fontName="Helvetica-Bold", fontSize=7.3, leading=9),
     cab=ParagraphStyle("c", fontName="Helvetica-Bold", fontSize=7.3, leading=9, textColor=colors.white,
                        alignment=1),
+    cab2=ParagraphStyle("c2", fontName="Helvetica-Bold", fontSize=6.6, leading=8, textColor=colors.white,
+                        alignment=1),
     sec=ParagraphStyle("s", fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=NAVY, spaceBefore=8,
                        spaceAfter=4),
     concl=ParagraphStyle("cc", fontName="Helvetica-Bold", fontSize=9.5, leading=13, textColor=NAVY,
@@ -139,6 +141,8 @@ def exportar_reporte(control: dict, ruta: str) -> str:
 
     # ---- indicadores
     kpis = [("Stock inicial", fmt_l(t["ini"]), f"{t['ini_tarros']} tarros + {fmt_l(t['ini_camion'])} camión", NAVY2),
+            ("Recibido", fmt_l(t["recibido"], 0), f"{t['rec_tarros']} tarros en {len(res['recepciones'])} "
+                                                  f"recepción(es)", colors.HexColor("#7B4FB0")),
             ("Consumo semana", fmt_l(t["consumo"]), f"{t['rellenos']} tarros rellenados al camión",
              colors.HexColor("#1F6FB2")),
             ("Sobrante calculado", fmt_l(t["calc"]), f"{t['calc_tarros']} tarros + {fmt_l(t['calc_camion'])} camión",
@@ -175,11 +179,11 @@ def exportar_reporte(control: dict, ruta: str) -> str:
 
     # ---- tabla por aceite
     h.append(Paragraph("Detalle por aceite (litros)", _E["sec"]))
-    g = ["Aceite", "Stock inicial", "", "", "Semana", "", "Sobrante calculado", "", "",
+    g = ["Aceite", "Stock inicial", "", "", "Semana", "", "", "Sobrante calculado", "", "",
          "Stock entregado", "", "", "Diferencia (real - calculado)", "", "", "Estado"]
-    sub_c = ["", "Tarros", "Camión", "Total", "Consumo", "Rellenos", "Tarros", "Camión", "Total",
+    sub_c = ["", "Tarros", "Camión", "Total", "Recib.<br/>tarros", "Consumo", "Rellenos", "Tarros", "Camión", "Total",
              "Tarros", "Camión", "Total", "Tarros", "Camión", "Total", ""]
-    filas = [[_p(x, "cab") for x in g], [_p(x, "cab") for x in sub_c]]
+    filas = [[_p(x, "cab") for x in g], [_p(x, "cab2") for x in sub_c]]
     estilos = []
     for i, f in enumerate(res["filas"]):
         c, e = f["calc"], f["entrega"]
@@ -187,22 +191,22 @@ def exportar_reporte(control: dict, ruta: str) -> str:
         fila = [_p(f"<b>{f['nombre']}</b>" + ("" if f["parte"] in f["nombre"] else
                                                   f"<br/><font color='#6B7785'>{f['parte']}</font>")),
                 c["tarros_ini"], fmt_num(c["camion_ini"]), fmt_num(c["total_ini"]),
-                fmt_num(c["consumo"]), c["rellenos"] + c["rellenos_implicitos"],
+                c["recibidos"], fmt_num(c["consumo"]), c["rellenos"] + c["rellenos_implicitos"],
                 c["tarros"], fmt_num(c["camion"]), fmt_num(c["total"])]
         if e:
             fila += [e["tarros"], fmt_num(e["camion"]), fmt_num(e["total"]),
                      fmt_signo(e["dif_tarros"], 0), fmt_signo(e["dif_camion"]), fmt_signo(e["dif_total"]),
                      _p(f"<b>{e['estado']}</b>")]
-            estilos += [("BACKGROUND", (15, r), (15, r), FONDO_ESTADO[e["estado"]]),
-                        ("TEXTCOLOR", (12, r), (14, r), COL_ESTADO[e["estado"]] if e["inconsistente"]
+            estilos += [("BACKGROUND", (16, r), (16, r), FONDO_ESTADO[e["estado"]]),
+                        ("TEXTCOLOR", (13, r), (15, r), COL_ESTADO[e["estado"]] if e["inconsistente"]
                          else colors.black)]
         else:
             fila += ["—"] * 6 + [_p("Pendiente")]
         if i % 2:
-            estilos.append(("BACKGROUND", (0, r), (14, r), colors.HexColor("#F7F9FB")))
+            estilos.append(("BACKGROUND", (0, r), (15, r), colors.HexColor("#F7F9FB")))
         filas.append(fila)
-    tr = [_p("<b>TOTAL</b>"), t["ini_tarros"], fmt_num(t["ini_camion"]), fmt_num(t["ini"]), fmt_num(t["consumo"]),
-          t["rellenos"], t["calc_tarros"], fmt_num(t["calc_camion"]), fmt_num(t["calc"])]
+    tr = [_p("<b>TOTAL</b>"), t["ini_tarros"], fmt_num(t["ini_camion"]), fmt_num(t["ini"]), t["rec_tarros"],
+          fmt_num(t["consumo"]), t["rellenos"], t["calc_tarros"], fmt_num(t["calc_camion"]), fmt_num(t["calc"])]
     if cerrado:
         tr += [t["ent_tarros"], fmt_num(t["ent_camion"]), fmt_num(t["ent"]),
                fmt_signo(t["ent_tarros"] - t["calc_tarros"], 0), fmt_signo(t["ent_camion"] - t["calc_camion"]),
@@ -210,35 +214,65 @@ def exportar_reporte(control: dict, ruta: str) -> str:
     else:
         tr += [""] * 7
     filas.append(tr)
-    anchos_rel = [0.155] + [0.05, 0.06, 0.06, 0.068, 0.06, 0.05, 0.06, 0.06, 0.05, 0.06, 0.06, 0.05, 0.058, 0.058, 0.075]
+    anchos_rel = [0.15, 0.045, 0.055, 0.06, 0.055, 0.06, 0.05, 0.045, 0.055, 0.06, 0.045, 0.055, 0.06,
+                  0.045, 0.055, 0.055, 0.075]
     s = sum(anchos_rel)
     tabla = Table(filas, colWidths=[ancho * x / s for x in anchos_rel], repeatRows=2)
     base = [("FONT", (0, 0), (-1, -1), "Helvetica", 7.5),
             ("BACKGROUND", (0, 0), (-1, 1), NAVY2),
-            ("SPAN", (1, 0), (3, 0)), ("SPAN", (4, 0), (5, 0)), ("SPAN", (6, 0), (8, 0)), ("SPAN", (9, 0), (11, 0)),
-            ("SPAN", (12, 0), (14, 0)), ("SPAN", (0, 0), (0, 1)), ("SPAN", (15, 0), (15, 1)),
-            ("ALIGN", (1, 2), (-1, -1), "RIGHT"), ("ALIGN", (15, 2), (15, -1), "CENTER"),
+            ("SPAN", (1, 0), (3, 0)), ("SPAN", (4, 0), (6, 0)), ("SPAN", (7, 0), (9, 0)), ("SPAN", (10, 0), (12, 0)),
+            ("SPAN", (13, 0), (15, 0)), ("SPAN", (0, 0), (0, 1)), ("SPAN", (16, 0), (16, 1)),
+            ("ALIGN", (1, 2), (-1, -1), "RIGHT"), ("ALIGN", (16, 2), (16, -1), "CENTER"),
+            ("ALIGN", (4, 2), (4, -1), "CENTER"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDE), ("BOX", (0, 0), (-1, -1), 0.6, BORDE),
             ("LINEAFTER", (0, 0), (0, -1), 0.8, colors.white), ("LINEAFTER", (3, 0), (3, -1), 0.9, NAVY2),
-            ("LINEAFTER", (5, 0), (5, -1), 0.9, NAVY2), ("LINEAFTER", (8, 0), (8, -1), 0.9, NAVY2),
-            ("LINEAFTER", (11, 0), (11, -1), 0.9, NAVY2), ("LINEAFTER", (14, 0), (14, -1), 0.9, NAVY2),
-            ("BACKGROUND", (6, 2), (8, -2), colors.HexColor("#FBF4E4")),
+            ("LINEAFTER", (6, 0), (6, -1), 0.9, NAVY2), ("LINEAFTER", (9, 0), (9, -1), 0.9, NAVY2),
+            ("LINEAFTER", (12, 0), (12, -1), 0.9, NAVY2), ("LINEAFTER", (15, 0), (15, -1), 0.9, NAVY2),
+            ("BACKGROUND", (4, 2), (4, -2), colors.HexColor("#F1EAF8")),
+            ("BACKGROUND", (7, 2), (9, -2), colors.HexColor("#FBF4E4")),
             ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E8EDF3")),
             ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 7.5),
-            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (1, 0), (-1, 1), 1.5), ("RIGHTPADDING", (1, 0), (-1, 1), 1.5)]
     tabla.setStyle(TableStyle(base + estilos))
     h.append(tabla)
 
-    # ---- cuadratura de rellenos
-    h.append(Paragraph("Cuadratura de rellenos (tarros al camión)", _E["sec"]))
+    # ---- cuadratura
+    h.append(Paragraph("Cuadratura en litros", _E["sec"]))
     lr = t["rellenos"] * lt
     h.append(Paragraph(
+        f"Stock inicial {fmt_l(t['ini'])} + recibido <b>{fmt_l(t['recibido'], 0)}</b> ({t['rec_tarros']} tarros) - "
+        f"consumo {fmt_l(t['consumo'])} = sobrante calculado <b>{fmt_l(t['calc'])}</b>. "
         f"Tarros rellenados al camión: <b>{t['rellenos']}</b>: salen <b>{fmt_l(lr, 0)}</b> de los tarros y entran "
-        f"<b>{fmt_l(lr, 0)}</b> al camión (balance 0 L). Stock inicial {fmt_l(t['ini'])} - consumo "
-        f"{fmt_l(t['consumo'])} = sobrante calculado <b>{fmt_l(t['calc'])}</b>. "
+        f"<b>{fmt_l(lr, 0)}</b> al camión (balance 0 L). "
         + ("Cuadratura verificada en todos los aceites." if res["cuadratura_ok"] else
            "<font color='#D64545'><b>Hay aceites que no cuadran: revise los avisos.</b></font>"), _E["normal"]))
+
+    # ---- recepciones
+    recs = res["recepciones"]
+    tit_rec = Paragraph("Recepciones de aceite durante la semana", _E["sec"])
+    if recs:
+        filas_r = [[_p(x, "cab") for x in ("N°", "Fecha", "Turno", "Tarros recibidos por aceite", "Tarros", "Litros",
+                                           "Observaciones")]]
+        for i, rc in enumerate(recs):
+            n = sum(int(v) for v in (rc.get("items") or {}).values())
+            det = " · ".join(f"<b>{p}</b>: {v}" for p, v in sorted((rc.get("items") or {}).items()))
+            filas_r.append([i + 1, fmt_fecha(rc.get("fecha")), rc.get("turno", ""), _p(det), n,
+                            fmt_num(n * lt, 0), _p(rc.get("obs") or "")])
+        filas_r.append(["", "", "", _p("<b>TOTAL</b>"), t["rec_tarros"], fmt_num(t["recibido"], 0), ""])
+        tr_ = Table(filas_r, colWidths=[ancho * x for x in (0.04, 0.09, 0.08, 0.37, 0.07, 0.09, 0.26)], repeatRows=1)
+        tr_.setStyle(TableStyle([("FONT", (0, 0), (-1, -1), "Helvetica", 7.5),
+                                 ("BACKGROUND", (0, 0), (-1, 0), NAVY2), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                 ("ALIGN", (0, 1), (2, -1), "CENTER"), ("ALIGN", (4, 1), (5, -1), "RIGHT"),
+                                 ("INNERGRID", (0, 0), (-1, -1), 0.3, BORDE), ("BOX", (0, 0), (-1, -1), 0.6, BORDE),
+                                 ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E8EDF3")),
+                                 ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 7.5),
+                                 ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
+        h.append(KeepTogether([tit_rec, tr_]))
+    else:
+        h.append(KeepTogether([tit_rec, Paragraph("No se registraron recepciones de aceite en este control.",
+                                                  _E["normal"])]))
 
     # ---- hallazgos
     lineas = []

@@ -159,3 +159,56 @@ def test_catalogo_planificacion_pm_solo_lectura(tmp_path):
     assert hashlib.sha256(ruta.read_bytes()).hexdigest() == antes   # no se modificó
     f = fusionar([{"parte": "LL-0002", "nombre": "x", "activo": False}, {"parte": "X-1", "nombre": "y"}], cat)
     assert [a["parte"] for a in f] == ["LL-0001", "LL-0002", "LL-0006", "X-1"] and f[1]["activo"] is False
+
+
+# ------------------------------------------------------------- recepciones
+def test_recepcion_suma_tarros_al_sobrante():
+    c = calcular_sobrante(2, 100, 50, 0, LT, recibidos=3)
+    assert c["tarros"] == 5 and c["camion"] == 50 and c["litros_recibidos"] == 624
+    assert c["total"] == 2 * 208 + 100 + 624 - 50 and c["cuadra"] and not c["avisos"]
+
+
+def test_tarros_recibidos_pueden_rellenarse_al_camion():
+    c = calcular_sobrante(0, 20, 300, 2, LT, recibidos=2)   # sin tarros iniciales: se rellena con lo recibido
+    assert c["tarros"] == 0 and c["camion"] == 20 + 416 - 300 and not c["avisos"] and c["cuadra"]
+    c = calcular_sobrante(1, 0, 0, 3, LT, recibidos=1)
+    assert c["rellenos"] == 2 and c["avisos"][0][0] == "error"
+
+
+def test_recepcion_no_registrada_se_sugiere():
+    c = calcular_sobrante(2, 100, 50, 0, LT)
+    a = analizar_entrega(c, 3, 50, LT)                    # aparece un tarro lleno más
+    assert a["estado"] == SOBRANTE and a["dif_total"] == 208
+    assert any("recepción" in m for _, m in a["hallazgos"])
+
+
+def test_control_con_recepciones(tmp_path):
+    ctl = _control()
+    ctl["recepciones"] = [{"fecha": "2026-11-18", "turno": "Turno A", "obs": "Guía ok", "items": {"LL-0002": 2}},
+                          {"fecha": "2026-11-20", "turno": "Turno B", "obs": "", "items": {"LL-0001": 1, "LL-0002": 1}}]
+    ctl["entrega"]["items"]["LL-0001"] = {"tarros": 4, "camion": 596}   # 4 = 5 + 1 recibido − 2 al camión
+    ctl["entrega"]["items"]["LL-0002"] = {"tarros": 5, "camion": 58}    # 3 − 1 relleno + 3 recibidos
+    res = resultado(ctl)
+    t = res["totales"]
+    assert t["rec_tarros"] == 4 and t["recibido"] == 832
+    assert t["calc"] == t["ini"] + 832 - t["consumo"] and res["cuadratura_ok"]
+    ctl2 = _control()
+    ctl2["recepciones"] = [{"fecha": "2026-11-18", "turno": "Turno A", "obs": "", "items": {"LL-0002": 2}}]
+    f2b = resultado(ctl2)["filas"][1]["entrega"]                       # los 2 tarros recibidos no están
+    assert f2b["tarros_sin_explicar"] == -2 and any("recepción registrada" in m for _, m in f2b["hallazgos"])
+    f1, f2 = res["filas"]
+    assert f1["calc"]["tarros"] == 6 and f1["entrega"]["estado"] == TRASPASO and f1["entrega"]["traspaso"] == 2
+    assert f2["calc"]["tarros"] == 5 and f2["entrega"]["estado"] == CUADRADO
+
+    from control_aceites.reporte_pdf import exportar_reporte
+    ruta = tmp_path / "rec.pdf"
+    exportar_reporte(ctl, str(ruta))
+    assert ruta.stat().st_size > 3000
+
+
+def test_control_antiguo_sin_recepciones():
+    ctl = _control()
+    ctl.pop("recepciones", None)
+    assert resultado(ctl)["totales"]["recibido"] == 0
+    ctl["recepciones"] = None
+    assert resultado(ctl)["totales"]["rec_tarros"] == 0

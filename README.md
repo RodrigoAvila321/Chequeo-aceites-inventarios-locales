@@ -31,10 +31,11 @@ Para ejecutarlo sin compilar: `pip install -r requirements.txt` y luego `python 
 
 | Paso | Botón | Qué hace |
 |---|---|---|
-| 1 | **Ingresar stock inicial** | Pregunta a qué turno corresponde el stock (Turno A / Turno B) y pide, por aceite, los **tarros llenos** (× 208 L) y los **litros en el camión lubricador** indicados por el jefe de operaciones. |
-| 2 | **Ingresar consumos semana** | Litros totales consumidos por aceite durante la semana y **tarros rellenados al camión**. Muestra el cálculo en vivo. |
+| 1 | **Stock inicial** | Pregunta a qué turno corresponde el stock (Turno A / Turno B) y pide, por aceite, los **tarros llenos** (× 208 L) y los **litros en el camión lubricador** indicados por el jefe de operaciones. |
+| — | **Recepción de aceites** | Durante la semana, cada vez que llegan aceites: fecha, turno, observaciones y **tarros llenos recibidos** por aceite. Se pueden registrar varias recepciones y eliminarlas. |
+| 2 | **Consumos semana** | Litros totales consumidos por aceite durante la semana y **tarros rellenados al camión**. Muestra el cálculo en vivo. |
 | 3 | *(automático)* | Informa el **sobrante calculado** por aceite: tarros, litros en camión, total y equivalencia en tarros. |
-| 4 | **Ingresar stock entregado** | Conteo físico entregado al finalizar el turno. Se compara contra el sobrante calculado. |
+| 4 | **Stock entregado** | Conteo físico entregado al finalizar el turno. Se compara contra el sobrante calculado. |
 | 5 | **Reporte PDF** | Si hay inconsistencias, se ofrece de inmediato. Incluye datos del turno, indicadores, detalle por aceite, cuadratura de rellenos, hallazgos, conclusión y firmas. |
 
 **Nuevo control** comienza otro ciclo y puede usar el stock entregado como stock inicial del siguiente. Los controles
@@ -43,6 +44,8 @@ quedan en **Historial**, donde se pueden abrir, reimprimir o eliminar.
 ## Reglas de cálculo (todo en litros)
 
 - Stock = tarros × 208 L + litros en camión.
+- **Recepciones:** los tarros recibidos se suman al stock de tarros. Sobrante = inicial + recibido − consumo. Los
+  tarros recibidos también se pueden rellenar al camión.
 - **Relleno al camión:** cada tarro vaciado resta 208 L a los tarros y suma 208 L al camión (balance 0 L). Se verifica
   que *stock inicial − consumo = sobrante calculado* en cada aceite.
 - El consumo sale del camión. Si supera lo que hay en el camión, se descuentan tarros completos (relleno no registrado)
@@ -52,6 +55,8 @@ quedan en **Historial**, donde se pueden abrir, reimprimir o eliminar.
   - **Cuadra en litros:** faltan tarros, pero su volumen aparece en el camión, es decir, tarros vaciados o cargados en
     el camión sin registrarse. No es pérdida. También detecta el caso inverso: un relleno registrado que no se hizo.
   - **Faltante / Sobrante:** diferencia neta en litros. Se informa además qué parte se explica por traspasos.
+  - Si sobran tarros completos, se sugiere una **recepción no registrada**; si faltan tarros de un aceite que tuvo
+    recepciones, se sugiere revisar si esa recepción realmente llegó.
 
 ## Datos
 

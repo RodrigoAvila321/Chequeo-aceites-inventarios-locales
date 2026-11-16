@@ -2,9 +2,11 @@
 
 Modelo por aceite:
     stock inicial  = tarros_ini × L_tarro + camión_ini
+    recepciones    = tarros llenos recibidos durante la semana: +N × L_tarro en tarros
     rellenos       = tarros vaciados al camión: −R × L_tarro en tarros y +R × L_tarro en el camión (suma cero)
     consumo        = litros despachados por el camión durante la semana
-    sobrante calc. = tarros (tarros_ini − R) + camión (camión_ini + R × L_tarro − consumo)
+    sobrante calc. = tarros (tarros_ini + recibidos − R) + camión (camión_ini + R × L_tarro − consumo)
+                   = stock inicial + recibido − consumo
 
 Si el consumo supera lo que hay en el camión, la diferencia se cubre con tarros completos (relleno no
 registrado) y se avisa. Al recibir el stock entregado por el turno se compara contra el sobrante calculado:
@@ -41,18 +43,22 @@ def _tarros(n: int) -> str:
 
 
 # --------------------------------------------------------------------- sobrante
-def calcular_sobrante(tarros_ini, camion_ini, consumo, rellenos, lt: float = LITROS_TARRO) -> dict:
-    tarros_ini, rellenos = int(tarros_ini or 0), int(rellenos or 0)
+def calcular_sobrante(tarros_ini, camion_ini, consumo, rellenos, lt: float = LITROS_TARRO,
+                      recibidos=0) -> dict:
+    tarros_ini, rellenos, recibidos = int(tarros_ini or 0), int(rellenos or 0), int(recibidos or 0)
     camion_ini, consumo = float(camion_ini or 0), float(consumo or 0)
     avisos: list[tuple[str, str]] = []
     total_ini = tarros_ini * lt + camion_ini
+    litros_recibidos = recibidos * lt
+    disponibles = tarros_ini + recibidos
 
     rel = rellenos
-    if rellenos > tarros_ini:
-        rel = tarros_ini
+    if rellenos > disponibles:
+        rel = disponibles
+        detalle = f" ({tarros_ini} iniciales + {recibidos} recibidos)" if recibidos else ""
         avisos.append(("error", f"Se registraron {_tarros(rellenos)} rellenados al camión, pero solo había "
-                                f"{_tarros(tarros_ini)}. Se consideran {rel}."))
-    tarros = tarros_ini - rel
+                                f"{_tarros(disponibles)}{detalle}. Se consideran {rel}."))
+    tarros = disponibles - rel
     camion = camion_ini + rel * lt - consumo
 
     implicitos = 0
@@ -70,8 +76,9 @@ def calcular_sobrante(tarros_ini, camion_ini, consumo, rellenos, lt: float = LIT
     mov_tarros = -(rel + implicitos) * lt          # litros que salen de los tarros
     mov_camion_rellenos = (rel + implicitos) * lt  # litros que entran al camión
     cuadra_rellenos = abs(mov_tarros + mov_camion_rellenos) < EPS
-    cuadra_total = abs(total_ini - consumo - total) < EPS
+    cuadra_total = abs(total_ini + litros_recibidos - consumo - total) < EPS
     return dict(tarros_ini=tarros_ini, camion_ini=_r(camion_ini), total_ini=_r(total_ini), consumo=_r(consumo),
+                recibidos=recibidos, litros_recibidos=_r(litros_recibidos), tarros_disponibles=disponibles,
                 rellenos=rel, rellenos_implicitos=implicitos, tarros=tarros, camion=_r(camion), total=_r(total),
                 equiv_tarros=total / lt if lt else 0.0, litros_rellenos=_r(mov_camion_rellenos),
                 cuadra=cuadra_rellenos and cuadra_total, avisos=avisos)
@@ -112,7 +119,8 @@ def analizar_entrega(calc: dict, tarros_real, camion_real, lt: float = LITROS_TA
         n = -tarros_sin
         hallazgos.append(("error", f"Faltan {_tarros(n)} ({fmt_l(n * lt, 0)}) que no aparecen en el camión."))
     elif tarros_sin > 0:
-        hallazgos.append(("aviso", f"Hay {_tarros(tarros_sin)} más que lo calculado ({fmt_l(tarros_sin * lt, 0)})."))
+        hallazgos.append(("aviso", f"Hay {_tarros(tarros_sin)} más que lo calculado ({fmt_l(tarros_sin * lt, 0)}): "
+                                   f"posible recepción de aceite no registrada (botón «Recepción de aceites»)."))
     if camion_sin < -EPS:
         hallazgos.append(("error", f"El camión tiene {fmt_l(-camion_sin)} menos que lo calculado."))
     elif camion_sin > EPS:
@@ -155,9 +163,19 @@ def etapa(control: dict | None) -> int:
     return 3
 
 
+def recibidos_por_aceite(control: dict) -> dict[str, int]:
+    """Suma de tarros recibidos por aceite en todas las recepciones del control."""
+    out: dict[str, int] = {}
+    for r in control.get("recepciones") or []:
+        for p, n in (r.get("items") or {}).items():
+            out[p] = out.get(p, 0) + int(n or 0)
+    return out
+
+
 def resultado(control: dict) -> dict:
     """Calcula todas las filas (una por aceite) y los totales de un control."""
     lt = float(control.get("litros_tarro") or LITROS_TARRO)
+    rec = recibidos_por_aceite(control)
     ini = (control.get("inicial") or {}).get("items", {})
     con = (control.get("consumos") or {}).get("items", {}) if control.get("consumos") else None
     ent = (control.get("entrega") or {}).get("items", {}) if control.get("entrega") else None
@@ -167,11 +185,16 @@ def resultado(control: dict) -> dict:
         i = ini.get(p, {})
         c = (con or {}).get(p, {})
         calc = calcular_sobrante(i.get("tarros", 0), i.get("camion", 0), c.get("consumo", 0),
-                                 c.get("rellenos", 0), lt)
+                                 c.get("rellenos", 0), lt, rec.get(p, 0))
         an = None
         if ent is not None:
             e = ent.get(p, {})
             an = analizar_entrega(calc, e.get("tarros", 0), e.get("camion", 0), lt)
+            if an["tarros_sin_explicar"] < 0 and calc["recibidos"]:
+                pos = next(i for i, (_, m) in enumerate(an["hallazgos"]) if m.startswith("Faltan "))
+                an["hallazgos"].insert(pos + 1, ("aviso", f"Este aceite tuvo {_tarros(calc['recibidos'])} recibidos "
+                                                          f"en la semana: revise si la recepción registrada "
+                                                          f"realmente llegó."))
         filas.append(dict(parte=p, nombre=ac.get("nombre", p), calc=calc, entrega=an, con_consumo=con is not None))
 
     def s(fn):
@@ -181,6 +204,8 @@ def resultado(control: dict) -> dict:
         ini=s(lambda f: f["calc"]["total_ini"]),
         ini_tarros=sum(f["calc"]["tarros_ini"] for f in filas),
         ini_camion=s(lambda f: f["calc"]["camion_ini"]),
+        rec_tarros=sum(f["calc"]["recibidos"] for f in filas),
+        recibido=s(lambda f: f["calc"]["litros_recibidos"]),
         consumo=s(lambda f: f["calc"]["consumo"]),
         rellenos=sum(f["calc"]["rellenos"] + f["calc"]["rellenos_implicitos"] for f in filas),
         calc=s(lambda f: f["calc"]["total"]),
@@ -199,6 +224,7 @@ def resultado(control: dict) -> dict:
     n_perd = sum(1 for f in filas if f["entrega"] and f["entrega"]["estado"] in (FALTANTE, SOBRANTE))
     avisos = [(f["parte"], nivel, txt) for f in filas for nivel, txt in f["calc"]["avisos"]]
     return dict(filas=filas, totales=tot, litros_tarro=lt, inconsistencias=n_inc, con_diferencia_litros=n_perd,
+                recepciones=list(control.get("recepciones") or []),
                 avisos=avisos, etapa=etapa(control),
                 cuadratura_ok=all(f["calc"]["cuadra"] for f in filas))
 

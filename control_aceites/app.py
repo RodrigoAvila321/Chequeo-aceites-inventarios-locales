@@ -9,10 +9,10 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import TITULO, __version__, tema
-from .calculo import conclusion, etapa, etiqueta, resultado
+from .calculo import conclusion, etapa, etiqueta, recibidos_por_aceite, resultado
 from .catalogo import CATALOGO_DEFECTO, buscar_db_pm, fusionar, leer_catalogo_pm
 from .db import NOMBRE_DB, Repositorio, carpeta_datos
-from .dialogos import FormularioConsumos, FormularioStock, PreguntaTurno, VentanaSobrante
+from .dialogos import FormularioConsumos, FormularioStock, PreguntaTurno, VentanaRecepciones, VentanaSobrante
 from .reporte_pdf import exportar_reporte
 from .tema import ACENTO, AZUL, FONDO, FUENTE, NAVY, NAVY_HOVER, ROJO, SUAVE, TARJETA, TEXTO, VERDE
 from .util import fmt_fecha, fmt_fechahora, fmt_l, fmt_num, fmt_signo, parse_num
@@ -25,6 +25,14 @@ FLUJO DEL CONTROL SEMANAL
    • El programa pregunta a qué turno (Turno A / Turno B) corresponde el stock existente.
    • Por cada aceite se ingresan los tarros llenos (208 L cada uno) y los litros en el camión lubricador,
      según lo indicado por el jefe de operaciones.
+
+RECEPCIÓN DE ACEITES (DURANTE LA SEMANA)
+   • Botón «Recepción de aceites»: registra los tarros llenos (208 L c/u) que llegan durante el turno,
+     con fecha, turno y observaciones. Puede registrar varias recepciones y eliminarlas.
+   • Lo recibido se suma al stock de tarros: sobrante = inicial + recibido − consumo.
+   • Los tarros recibidos también pueden rellenarse al camión.
+   • Si al recibir el stock entregado sobran tarros completos, el programa sugiere una posible recepción
+     no registrada.
 
 2. INGRESAR CONSUMOS DE LA SEMANA
    • Litros totales consumidos por aceite durante la semana posterior (salen del camión lubricador).
@@ -220,26 +228,32 @@ class App(tk.Tk):
         self.lbl_info = tk.Label(c.inner, text="", background=TARJETA, foreground=TEXTO, font=(FUENTE, 9),
                                  justify="left", anchor="w")
         self.lbl_info.pack(fill="x", pady=(4, 0))
+        c.inner.bind("<Configure>", lambda e: self.lbl_info.configure(wraplength=max(300, e.width - 10)))
 
         # botones de acción
         acc = tk.Frame(p, background=FONDO)
         acc.pack(fill="x", padx=22, pady=(0, 10))
-        self.b_inicial = self._boton_accion(acc, "1  Ingresar stock inicial", "tarro", "Naranja", self.ingresar_inicial)
-        self.b_consumos = self._boton_accion(acc, "2  Ingresar consumos semana", "consumo", "Azul",
-                                             self.ingresar_consumos)
-        self.b_entrega = self._boton_accion(acc, "3  Ingresar stock entregado", "entrega", "Verde",
-                                            self.ingresar_entrega)
-        self.b_reporte = self._boton_accion(acc, "Reporte PDF", "reporte", "Morado", self.generar_reporte)
-        self.b_nuevo = self._boton_accion(acc, "Nuevo control", "nuevo", "Navy", self.nuevo_control)
-        for i, b in enumerate((self.b_inicial, self.b_consumos, self.b_entrega, self.b_reporte, self.b_nuevo)):
+        self.b_inicial = self._boton_accion(acc, "1  Stock inicial", "tarro", "Naranja", self.ingresar_inicial)
+        self.b_recepcion = self._boton_accion(acc, "Recepción de aceites", "recepcion", "Morado", self.recepciones)
+        self.b_consumos = self._boton_accion(acc, "2  Consumos semana", "consumo", "Azul", self.ingresar_consumos)
+        self.b_entrega = self._boton_accion(acc, "3  Stock entregado", "entrega", "Verde", self.ingresar_entrega)
+        for i, b in enumerate((self.b_inicial, self.b_recepcion, self.b_consumos, self.b_entrega)):
             b.grid(row=0, column=i, sticky="ew", padx=(0 if i == 0 else 8, 0))
-            acc.columnconfigure(i, weight=3 if i < 3 else 2, uniform="acc" if i < 3 else "acc2")
+            acc.columnconfigure(i, weight=1, uniform="acc")
+        # acciones secundarias, junto al título de la página
+        sec = tk.Frame(cab, background=FONDO)
+        sec.place(relx=1.0, rely=0.5, anchor="e")
+        self.b_reporte = self._boton_accion(sec, "Reporte PDF", "reporte", "Gris", self.generar_reporte, grande=False)
+        self.b_nuevo = self._boton_accion(sec, "Nuevo control", "nuevo", "Navy", self.nuevo_control, grande=False)
+        self.b_reporte.pack(side="left")
+        self.b_nuevo.pack(side="left", padx=(8, 0))
 
         # indicadores
         ind = tk.Frame(p, background=FONDO)
         ind.pack(fill="x", padx=22, pady=(0, 10))
         self.ind = {}
         for i, (k, tit, ico, col) in enumerate((("ini", "Stock inicial", "tarro", tema.NAVY2),
+                                                ("rec", "Recibido semana", "recepcion", tema.MORADO),
                                                 ("con", "Consumo semana", "consumo", AZUL),
                                                 ("calc", "Sobrante calculado", "gota", tema.AMBAR),
                                                 ("ent", "Stock entregado", "entrega", VERDE),
@@ -254,7 +268,8 @@ class App(tk.Tk):
         t.pack(fill="x", padx=22, pady=(0, 10))
         cols = [("ac", "Aceite", 170, "w"), ("pt", "N° parte", 62, "center"),
                 ("it", "Inicial\ntarros", 52, "center"), ("ic", "Inicial\ncamión", 62, "e"),
-                ("itot", "Inicial\ntotal", 66, "e"), ("co", "Consumo\nsemana", 64, "e"),
+                ("itot", "Inicial\ntotal", 66, "e"), ("rc", "Recib.\ntarros", 52, "center"),
+                ("co", "Consumo\nsemana", 64, "e"),
                 ("re", "Relle-\nnos", 48, "center"), ("ct", "Calc.\ntarros", 52, "center"),
                 ("cc", "Calc.\ncamión", 62, "e"), ("ctot", "Sobrante\ncalculado", 70, "e"),
                 ("et", "Entreg.\ntarros", 56, "center"), ("ec", "Entreg.\ncamión", 62, "e"),
@@ -293,9 +308,10 @@ class App(tk.Tk):
         self.txt.tag_configure("concl", font=(FUENTE, 10, "bold"), foreground=NAVY, spacing3=6)
         return pag
 
-    def _boton_accion(self, master, texto, ico, estilo, cmd):
-        img = tema.icono(self, ico, 20, "#FFFFFF")
-        b = ttk.Button(master, text=texto, image=img, compound="left", style=f"{estilo}Grande.TButton", command=cmd)
+    def _boton_accion(self, master, texto, ico, estilo, cmd, grande=True):
+        img = tema.icono(self, ico, 20 if grande else 16, "#FFFFFF")
+        b = ttk.Button(master, text=" " + texto, image=img, compound="left",
+                       style=f"{estilo}{'Grande' if grande else ''}.TButton", command=cmd)
         b.image = img
         return b
 
@@ -304,9 +320,7 @@ class App(tk.Tk):
         ctl = self.control
         et = etapa(ctl)
         self.pasos.fijar({0: 0, 1: 1, 2: 3}.get(et) if et < 3 else (5 if ctl.get("reporte") else 4))
-        self.b_inicial.configure(text="1  Editar stock inicial" if et >= 1 else "1  Ingresar stock inicial")
-        self.b_consumos.configure(text="2  Editar consumos semana" if et >= 2 else "2  Ingresar consumos semana")
-        self.b_entrega.configure(text="3  Editar stock entregado" if et >= 3 else "3  Ingresar stock entregado")
+        self.b_recepcion.state(["!disabled"] if et >= 1 else ["disabled"])
         self.b_consumos.state(["!disabled"] if et >= 1 else ["disabled"])
         self.b_entrega.state(["!disabled"] if et >= 2 else ["disabled"])
         self.b_reporte.state(["!disabled"] if et >= 1 else ["disabled"])
@@ -337,16 +351,20 @@ class App(tk.Tk):
                                              f"actualizado {fmt_fechahora(ctl.get('actualizado'))}")
         info = [f"Stock inicial: {ini.get('turno')} · {fmt_fecha(ini.get('fecha'))} · Jefe de operaciones: "
                 f"{ini.get('persona') or '—'}"]
+        nrec = len(ctl.get("recepciones") or [])
+        info.append(f"Recepciones: {nrec} ({t['rec_tarros']} tarros)" if nrec else "Recepciones: ninguna")
         info.append(f"Consumos: {fmt_fecha(con.get('desde'))} a {fmt_fecha(con.get('hasta'))}" if con
                     else "Consumos: pendiente")
         info.append(f"Stock entregado: {ent.get('turno')} · {fmt_fecha(ent.get('fecha'))} · Responsable: "
                     f"{ent.get('persona') or '—'}" if ent else "Stock entregado: pendiente")
-        self.lbl_info.configure(text="      |      ".join(info))
+        self.lbl_info.configure(text="   |   ".join(info))
         lat += f"\nControl N° {ctl.get('id')} · {ini.get('turno')}\n" + \
             ("Cerrado" if et >= 3 else "Abierto: " + ("falta consumos" if et == 1 else "falta stock entregado"))
         self.lbl_estado_lat.configure(text=lat)
 
         self.ind["ini"].fijar(fmt_l(t["ini"]), f"{t['ini_tarros']} tarros + {fmt_l(t['ini_camion'])} camión")
+        self.ind["rec"].fijar(fmt_l(t["recibido"], 0), f"{t['rec_tarros']} tarros en {nrec} recepción(es)"
+                              if nrec else "sin recepciones")
         if et >= 2:
             self.ind["con"].fijar(fmt_l(t["consumo"]), f"{t['rellenos']} tarros rellenados al camión")
             self.ind["calc"].fijar(fmt_l(t["calc"]), f"{t['calc_tarros']} tarros + {fmt_l(t['calc_camion'])} camión",
@@ -357,8 +375,7 @@ class App(tk.Tk):
         if et >= 3:
             self.ind["ent"].fijar(fmt_l(t["ent"]), f"{t['ent_tarros']} tarros + {fmt_l(t['ent_camion'])} camión")
             col = VERDE if res["inconsistencias"] == 0 else (ROJO if abs(t["dif"]) > 0.004 else AZUL)
-            self.ind["dif"].fijar(fmt_signo(t["dif"], 1) + " L", f"{res['inconsistencias']} aceite(s) con "
-                                  f"inconsistencia", col)
+            self.ind["dif"].fijar(fmt_signo(t["dif"], 1) + " L", f"{res['inconsistencias']} con inconsistencia", col)
         else:
             self.ind["ent"].fijar("—", "pendiente")
             self.ind["dif"].fijar("—", "pendiente")
@@ -366,7 +383,8 @@ class App(tk.Tk):
         datos_g = []
         for i, f in enumerate(res["filas"]):
             c, e = f["calc"], f["entrega"]
-            vals = [f"{f['nombre']}", f["parte"], c["tarros_ini"], fmt_num(c["camion_ini"]), fmt_num(c["total_ini"])]
+            vals = [f"{f['nombre']}", f["parte"], c["tarros_ini"], fmt_num(c["camion_ini"]), fmt_num(c["total_ini"]),
+                    c["recibidos"] or ""]
             if et >= 2:
                 vals += [fmt_num(c["consumo"]), c["rellenos"] + c["rellenos_implicitos"], c["tarros"],
                          fmt_num(c["camion"]), fmt_num(c["total"])]
@@ -380,7 +398,7 @@ class App(tk.Tk):
                 tags = ("par",) if i % 2 else ()
             self.tv.insert("", "end", values=vals, tags=tags)
             datos_g.append((f["parte"], [c["total_ini"], c["total"] if et >= 2 else None, e["total"] if e else None]))
-        tot = ["TOTAL", "", t["ini_tarros"], fmt_num(t["ini_camion"]), fmt_num(t["ini"])]
+        tot = ["TOTAL", "", t["ini_tarros"], fmt_num(t["ini_camion"]), fmt_num(t["ini"]), t["rec_tarros"]]
         tot += [fmt_num(t["consumo"]), t["rellenos"], t["calc_tarros"], fmt_num(t["calc_camion"]),
                 fmt_num(t["calc"])] if et >= 2 else [""] * 5
         tot += [t["ent_tarros"], fmt_num(t["ent_camion"]), fmt_num(t["ent"]), fmt_signo(t["dif"]),
@@ -394,9 +412,10 @@ class App(tk.Tk):
         if et >= 2:
             ok = res["cuadratura_ok"]
             lr = t["rellenos"] * lt
-            self.txt.insert("end", ("✔ " if ok else "⚠ ") + f"Cuadratura de rellenos: −{fmt_l(lr, 0)} en tarros / "
-                            f"+{fmt_l(lr, 0)} en camión. Inicial {fmt_l(t['ini'])} − consumo {fmt_l(t['consumo'])} "
-                            f"= sobrante {fmt_l(t['calc'])}.\n", "ok" if ok else "error")
+            self.txt.insert("end", ("✔ " if ok else "⚠ ") + f"Cuadratura: rellenos −{fmt_l(lr, 0)} en tarros / "
+                            f"+{fmt_l(lr, 0)} en camión. Inicial {fmt_l(t['ini'])} + recibido "
+                            f"{fmt_l(t['recibido'], 0)} − consumo {fmt_l(t['consumo'])} = sobrante "
+                            f"{fmt_l(t['calc'])}.\n", "ok" if ok else "error")
         for f in res["filas"]:
             items = list(f["calc"]["avisos"]) + (f["entrega"]["hallazgos"] if f["entrega"] else [])
             if f["entrega"] and not f["entrega"]["inconsistente"] and not f["calc"]["avisos"]:
@@ -437,7 +456,8 @@ class App(tk.Tk):
         if ctl and etapa(ctl) >= 1 and ctl.get("inicial") is previo:
             ctl["inicial"] = r
         else:
-            self.control = {"aceites": aceites, "litros_tarro": lt, "inicial": r, "consumos": None, "entrega": None}
+            self.control = {"aceites": aceites, "litros_tarro": lt, "inicial": r, "recepciones": [],
+                            "consumos": None, "entrega": None}
         self.control.pop("reporte", None)
         self._guardar()
         self.refrescar()
@@ -447,13 +467,39 @@ class App(tk.Tk):
                                         f"Total: {fmt_l(res['totales']['ini'])} "
                                         f"({res['totales']['ini_tarros']} tarros + "
                                         f"{fmt_l(res['totales']['ini_camion'])} en camión).\n\n"
-                                        "Siguiente paso: «2  Ingresar consumos semana».", parent=self)
+                                        "Durante la semana: «Recepción de aceites» si llegan tarros.\n"
+                                        "Luego: «2  Consumos semana».", parent=self)
+
+    def recepciones(self):
+        ctl = self.control
+        if etapa(ctl) < 1:
+            return
+        if etapa(ctl) >= 3 and not messagebox.askyesno(
+                TITULO, "Este control ya tiene el stock entregado.\n\nSi agrega o elimina recepciones se recalculan "
+                        "el sobrante y el análisis de inconsistencias. ¿Continuar?", parent=self):
+            return
+        antes = resultado(ctl)["inconsistencias"]
+
+        def al_cambiar():
+            ctl.pop("reporte", None)
+            self.repo.guardar_control(ctl)
+            self.repo.set("control_actual", ctl["id"])
+            self.control = ctl
+            self.refrescar()
+
+        VentanaRecepciones(self, ctl, al_cambiar).mostrar()
+        self.control = self.repo.control(ctl["id"])
+        self.refrescar()
+        res = resultado(self.control)
+        if etapa(self.control) >= 3 and res["inconsistencias"] != antes:
+            messagebox.showinfo(TITULO, "Análisis recalculado.\n\n" + conclusion(res), parent=self)
 
     def ingresar_consumos(self):
         ctl = self.control
         if etapa(ctl) < 1:
             return
-        r = FormularioConsumos(self, ctl["aceites"], ctl["inicial"], ctl["litros_tarro"], ctl.get("consumos")).mostrar()
+        r = FormularioConsumos(self, ctl["aceites"], ctl["inicial"], ctl["litros_tarro"], ctl.get("consumos"),
+                               recibidos_por_aceite(ctl)).mostrar()
         if not r:
             return
         ctl["consumos"] = r
@@ -556,6 +602,7 @@ class App(tk.Tk):
         self.tv_hist = tabla(c.inner, [("id", "N°", 50, "center"), ("turno", "Turno", 80, "center"),
                                        ("fecha", "Fecha stock", 90, "center"), ("jefe", "Jefe de operaciones", 160, "w"),
                                        ("sem", "Semana consumos", 160, "center"), ("ini", "Inicial (L)", 90, "e"),
+                                       ("rec", "Recibido (L)", 90, "e"),
                                        ("con", "Consumo (L)", 90, "e"), ("calc", "Sobrante calc. (L)", 110, "e"),
                                        ("ent", "Entregado (L)", 100, "e"), ("dif", "Diferencia (L)", 100, "e"),
                                        ("est", "Estado", 190, "w")], alto=20)
@@ -585,7 +632,8 @@ class App(tk.Tk):
             tv.insert("", "end", iid=str(c["id"]), tags=tag, values=(
                 c["id"], ini.get("turno"), fmt_fecha(ini.get("fecha")), ini.get("persona") or "",
                 f"{fmt_fecha(con.get('desde'))} a {fmt_fecha(con.get('hasta'))}" if con else "",
-                fmt_num(t["ini"]), fmt_num(t["consumo"]) if et >= 2 else "", fmt_num(t["calc"]) if et >= 2 else "",
+                fmt_num(t["ini"]), fmt_num(t["recibido"]) if t["recibido"] else "",
+                fmt_num(t["consumo"]) if et >= 2 else "", fmt_num(t["calc"]) if et >= 2 else "",
                 fmt_num(t["ent"]) if et >= 3 else "", fmt_signo(t["dif"]) if et >= 3 else "", est))
 
     def _hist_sel(self):
