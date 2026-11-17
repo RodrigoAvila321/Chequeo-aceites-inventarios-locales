@@ -155,7 +155,7 @@ def test_catalogo_planificacion_pm_solo_lectura(tmp_path):
     antes = hashlib.sha256(ruta.read_bytes()).hexdigest()
     cat = leer_catalogo_pm(ruta)
     assert [c["parte"] for c in cat] == ["LL-0001", "LL-0002", "LL-0006"]
-    assert cat[2]["nombre"] == "Aceite perforación (consumo diario)"
+    assert cat[2]["nombre"] == "Aceite perforación"
     assert hashlib.sha256(ruta.read_bytes()).hexdigest() == antes   # no se modificó
     f = fusionar([{"parte": "LL-0002", "nombre": "x", "activo": False}, {"parte": "X-1", "nombre": "y"}], cat)
     assert [a["parte"] for a in f] == ["LL-0001", "LL-0002", "LL-0006", "X-1"] and f[1]["activo"] is False
@@ -212,3 +212,35 @@ def test_control_antiguo_sin_recepciones():
     assert resultado(ctl)["totales"]["recibido"] == 0
     ctl["recepciones"] = None
     assert resultado(ctl)["totales"]["rec_tarros"] == 0
+
+
+
+# ------------------------------------------------------------ nombres reales
+def test_catalogo_por_defecto_con_nombres_reales():
+    from control_aceites.catalogo import CATALOGO_DEFECTO, es_nombre_generico
+    nombres = {a["parte"]: a["nombre"] for a in CATALOGO_DEFECTO}
+    assert list(nombres) == [f"LL-000{i}" for i in range(1, 8)]
+    assert nombres["LL-0001"] == "Mobil Delvac MX 15W40" and nombres["LL-0006"] == "Mobil Almo 529"
+    assert nombres["LL-0007"] == "Mobil Mining Coolant 50%"
+    assert es_nombre_generico("Lubricante LL-0006 (consumo diario)") and not es_nombre_generico("Mobil Almo 529")
+
+
+def test_leer_nombres_desde_excel(tmp_path):
+    import openpyxl
+    from control_aceites.catalogo import leer_catalogo
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Configuración"
+    ws.append(["Modelo", "Sistema", "Lubricante", "N° parte", "Litros"])
+    ws.append(["DI650i", "Motor", "Mobil Delvac MX 15W40", "LL-0001", 40])
+    ws.append(["DR412i", "Motor", "Mobil Delvac MX 15W40", "LL-0001", 50])
+    ws.append(["DI650i", "Hidráulico", "Mobil DTE 10 Excel 46", "LL-0004", 300])
+    ws.append([])
+    ws.append(["Equipo", "D10", "Mobil Almo 529", "LL-0006", 4])
+    wb.save(tmp_path / "Planificacion_PM.xlsx")
+    antes = (tmp_path / "Planificacion_PM.xlsx").read_bytes()
+    cat = leer_catalogo(tmp_path / "Planificacion_PM.xlsx")
+    assert [(a["parte"], a["nombre"]) for a in cat] == [("LL-0001", "Mobil Delvac MX 15W40"),
+                                                         ("LL-0004", "Mobil DTE 10 Excel 46"),
+                                                         ("LL-0006", "Mobil Almo 529")]
+    assert (tmp_path / "Planificacion_PM.xlsx").read_bytes() == antes      # solo lectura

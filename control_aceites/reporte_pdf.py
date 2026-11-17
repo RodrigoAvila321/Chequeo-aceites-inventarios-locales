@@ -14,10 +14,9 @@ from . import TITULO, __version__
 from .calculo import CUADRADO, FALTANTE, SOBRANTE, TRASPASO, conclusion, resultado
 from .util import fmt_fecha, fmt_fechahora, fmt_l, fmt_num, fmt_signo
 
-NAVY = colors.HexColor("#15233A")
-NAVY2 = colors.HexColor("#22354F")
-NARANJA = colors.HexColor("#F28C28")
-AMARILLO = colors.HexColor("#F6C343")
+NAVY = colors.HexColor("#1B1E23")
+NAVY2 = colors.HexColor("#2C313A")
+NARANJA = colors.HexColor("#F2A62B")
 BORDE = colors.HexColor("#D8E0E9")
 SUAVE = colors.HexColor("#6B7785")
 GRIS_F = colors.HexColor("#F3F5F8")
@@ -31,9 +30,9 @@ _E = dict(
     normal=ParagraphStyle("n", fontName="Helvetica", fontSize=8.5, leading=11),
     peq=ParagraphStyle("p", fontName="Helvetica", fontSize=7.3, leading=9),
     peqb=ParagraphStyle("pb", fontName="Helvetica-Bold", fontSize=7.3, leading=9),
-    cab=ParagraphStyle("c", fontName="Helvetica-Bold", fontSize=7.3, leading=9, textColor=colors.white,
+    cab=ParagraphStyle("c", fontName="Helvetica-Bold", fontSize=7.3, leading=9, textColor=NARANJA,
                        alignment=1),
-    cab2=ParagraphStyle("c2", fontName="Helvetica-Bold", fontSize=6.6, leading=8, textColor=colors.white,
+    cab2=ParagraphStyle("c2", fontName="Helvetica-Bold", fontSize=6.6, leading=8, textColor=NARANJA,
                         alignment=1),
     sec=ParagraphStyle("s", fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=NAVY, spaceBefore=8,
                        spaceAfter=4),
@@ -58,37 +57,38 @@ def _encabezado(titulo: str, subtitulo: str):
         c.saveState()
         c.setFillColor(NAVY)
         c.rect(0, h - 26 * mm, w, 26 * mm, fill=1, stroke=0)
-        # franja de seguridad
-        c.setFillColor(AMARILLO)
-        c.rect(0, h - 28.5 * mm, w, 2.5 * mm, fill=1, stroke=0)
-        c.setFillColor(NAVY)
-        x = 0
-        while x < w:
-            p = c.beginPath()
-            p.moveTo(x, h - 28.5 * mm)
-            p.lineTo(x + 2.5 * mm, h - 26 * mm)
-            p.lineTo(x + 5 * mm, h - 26 * mm)
-            p.lineTo(x + 2.5 * mm, h - 28.5 * mm)
-            p.close()
-            c.drawPath(p, fill=1, stroke=0)
-            x += 6 * mm
-        # logo: gota
-        cx, cy = 20 * mm, h - 13 * mm
+        # línea ámbar que se desvanece (nivel de aceite)
+        n = 60
+        for k in range(n):
+            f = (k / (n - 1)) ** 1.6
+            c.setFillColor(colors.Color(0.949 + (0.106 - 0.949) * f, 0.651 + (0.118 - 0.651) * f,
+                                        0.169 + (0.137 - 0.169) * f))
+            c.rect(w * k / n, h - 27.2 * mm, w / n + 0.5, 1.2 * mm, fill=1, stroke=0)
+        # logo: tarro ámbar con gota sobre cuadrado grafito
+        x0, y0, lado = 10 * mm, h - 22 * mm, 18 * mm
+        c.setFillColor(colors.HexColor("#23272E"))
+        c.setStrokeColor(NARANJA)
+        c.setLineWidth(1.4)
+        c.roundRect(x0, y0, lado, lado, 4 * mm, fill=1, stroke=1)
         c.setFillColor(NARANJA)
-        c.circle(cx, cy, 8.5 * mm, fill=1, stroke=0)
+        c.roundRect(x0 + 4.4 * mm, y0 + 2.6 * mm, 9.2 * mm, 10.4 * mm, 1.3 * mm, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#23272E"))
+        for yy in (6.2, 9.8):
+            c.rect(x0 + 4.4 * mm, y0 + yy * mm, 9.2 * mm, 0.35 * mm, fill=1, stroke=0)
         c.setFillColor(colors.white)
-        c.circle(cx, cy - 1.6 * mm, 3.6 * mm, fill=1, stroke=0)
+        cx, cy = x0 + lado / 2, y0 + 14.6 * mm
+        c.circle(cx, cy, 1.5 * mm, fill=1, stroke=0)
         p = c.beginPath()
-        p.moveTo(cx, cy + 6 * mm)
-        p.lineTo(cx - 3.3 * mm, cy - 0.3 * mm)
-        p.lineTo(cx + 3.3 * mm, cy - 0.3 * mm)
+        p.moveTo(cx, cy + 2.6 * mm)
+        p.lineTo(cx - 1.4 * mm, cy + 0.4 * mm)
+        p.lineTo(cx + 1.4 * mm, cy + 0.4 * mm)
         p.close()
         c.drawPath(p, fill=1, stroke=0)
         c.setFillColor(colors.white)
         c.setFont("Helvetica-Bold", 16)
         c.drawString(33 * mm, h - 12.5 * mm, titulo)
         c.setFont("Helvetica", 9)
-        c.setFillColor(colors.HexColor("#B9C4D3"))
+        c.setFillColor(NARANJA)
         c.drawString(33 * mm, h - 18.5 * mm, subtitulo)
         c.setFont("Helvetica", 7.5)
         c.drawRightString(w - 12 * mm, h - 12.5 * mm, f"{TITULO} v{__version__}")

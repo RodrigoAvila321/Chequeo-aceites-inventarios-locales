@@ -90,14 +90,15 @@ class Repositorio:
         d.update(id=r["id"], creado=r["creado"], actualizado=r["actualizado"])
         return d
 
-    def guardar_control(self, control: dict) -> int:
+    def guardar_control(self, control: dict, tocar: bool = True) -> int:
         datos = {k: v for k, v in control.items() if k not in ("id", "creado", "actualizado")}
         ini = control.get("inicial") or {}
         txt = json.dumps(datos, ensure_ascii=False)
         ahora = ahora_iso()
         if control.get("id"):
-            self.cx.execute("UPDATE controles SET turno=?, fecha=?, datos=?, actualizado=? WHERE id=?",
-                            (ini.get("turno"), ini.get("fecha"), txt, ahora, control["id"]))
+            self.cx.execute("UPDATE controles SET turno=?, fecha=?, datos=?, actualizado=COALESCE(?, actualizado) "
+                            "WHERE id=?", (ini.get("turno"), ini.get("fecha"), txt, ahora if tocar else None,
+                                           control["id"]))
             cid = control["id"]
         else:
             cur = self.cx.execute("INSERT INTO controles(turno, fecha, datos, creado, actualizado) VALUES(?,?,?,?,?)",

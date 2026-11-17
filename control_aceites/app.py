@@ -10,11 +10,12 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from . import TITULO, __version__, tema
 from .calculo import conclusion, etapa, etiqueta, recibidos_por_aceite, resultado
-from .catalogo import CATALOGO_DEFECTO, buscar_db_pm, fusionar, leer_catalogo_pm
+from .catalogo import (CATALOGO_DEFECTO, NOMBRES_REALES, buscar_db_pm, es_nombre_generico, fusionar,
+                       leer_catalogo)
 from .db import NOMBRE_DB, Repositorio, carpeta_datos
 from .dialogos import FormularioConsumos, FormularioStock, PreguntaTurno, VentanaRecepciones, VentanaSobrante
 from .reporte_pdf import exportar_reporte
-from .tema import ACENTO, AZUL, FONDO, FUENTE, NAVY, NAVY_HOVER, ROJO, SUAVE, TARJETA, TEXTO, VERDE
+from .tema import ACENTO, AZUL, FONDO, FUENTE, NAVY, NAVY_HOVER, ROJO, SUAVE, TARJETA, TEXTO, TITULO_C, VERDE
 from .util import fmt_fecha, fmt_fechahora, fmt_l, fmt_num, fmt_signo, parse_num
 from .widgets import Desplazable, FranjaSeguridad, GraficoLitros, Indicador, Pasos, tabla, tarjeta
 
@@ -62,9 +63,13 @@ NUEVO CONTROL
    • Los controles anteriores quedan en «Historial», desde donde se pueden abrir o reimprimir.
 
 ACEITES
-   • Corresponden a los lubricantes del programa Planificación PM (N° de parte LL-0001 a LL-0007).
-   • Si en este computador existe la base de Planificación PM (Documentos\\PlanificacionPM), los nombres se
-     leen desde ahí en modo solo lectura; esa base nunca se modifica.
+   • Corresponden a los lubricantes del programa Planificación PM. LL-000X es el código de compra:
+       LL-0001  Mobil Delvac MX 15W40          LL-0005  Mobil SHC Gear 320
+       LL-0002  M. Lube HD Plus 75W90          LL-0006  Mobil Almo 529
+       LL-0003  Mobil SHC Rarus 46             LL-0007  Mobil Mining Coolant 50%
+       LL-0004  Mobil DTE 10 Excel 46
+   • «Configuración > Leer desde Planificación PM» actualiza los nombres desde el Excel Planificacion_PM
+     (.xlsm) o su base de datos (.db), siempre en modo solo lectura: esos archivos nunca se modifican.
    • En «Configuración» puede activar/desactivar aceites, editar nombres y los litros por tarro.
 
 DATOS
@@ -104,55 +109,79 @@ class App(tk.Tk):
     def _inicializar_catalogo(self):
         self.origen_catalogo = self.repo.get("origen_catalogo", "")
         if self.repo.catalogo():
+            self._migrar_nombres()
             return
         ruta = buscar_db_pm()
         cat = None
         if ruta:
             try:
-                cat = leer_catalogo_pm(ruta)
+                cat = leer_catalogo(ruta)
                 self.origen_catalogo = str(ruta)
             except ValueError:
                 cat = None
         if not cat:
             cat = [dict(a) for a in CATALOGO_DEFECTO]
-            self.origen_catalogo = "Lista por defecto (LL-0001 a LL-0007)"
+            self.origen_catalogo = "Nombres de Planificación PM incluidos en el programa"
         self.repo.set("catalogo", cat)
         self.repo.set("origen_catalogo", self.origen_catalogo)
 
+    def _migrar_nombres(self):
+        """Reemplaza los nombres provisorios de v1.0/v1.1 («Lubricante LL-0001») por los nombres reales,
+        en el catálogo y en los controles guardados."""
+        cat = self.repo.catalogo()
+        cambio = False
+        for a in cat:
+            if es_nombre_generico(a["nombre"]) and a["parte"] in NOMBRES_REALES:
+                a["nombre"] = NOMBRES_REALES[a["parte"]]
+                cambio = True
+        if cambio:
+            self.repo.set("catalogo", cat)
+            self.origen_catalogo = "Nombres de Planificación PM incluidos en el programa"
+            self.repo.set("origen_catalogo", self.origen_catalogo)
+        for c in self.repo.controles():
+            mod = False
+            for a in c.get("aceites", []):
+                if es_nombre_generico(a.get("nombre", "")) and a["parte"] in NOMBRES_REALES:
+                    a["nombre"] = NOMBRES_REALES[a["parte"]]
+                    mod = True
+            if mod:
+                self.repo.guardar_control(c, tocar=False)
+
     # ---------------------------------------------------------- estructura
     def _construir(self):
-        lateral = tk.Frame(self, background=NAVY, width=230)
-        lateral.pack(side="left", fill="y")
-        lateral.pack_propagate(False)
-        logo = tk.Frame(lateral, background=NAVY)
-        logo.pack(fill="x", pady=(18, 6), padx=16)
-        self._img_logo = tema.icono(self, "logo", 46)
+        # ---- barra superior: logo, pestañas y estado
+        barra = tk.Frame(self, background=NAVY, height=68)
+        barra.pack(side="top", fill="x")
+        barra.pack_propagate(False)
+        logo = tk.Frame(barra, background=NAVY)
+        logo.pack(side="left", padx=(18, 26))
+        self._img_logo = tema.icono(self, "logo", 42)
         tk.Label(logo, image=self._img_logo, background=NAVY).pack(side="left")
         t = tk.Frame(logo, background=NAVY)
         t.pack(side="left", padx=10)
-        tk.Label(t, text="Control de", background=NAVY, foreground="#B9C4D3", font=(FUENTE, 10)).pack(anchor="w")
-        tk.Label(t, text="Aceites", background=NAVY, foreground="#FFFFFF", font=(FUENTE, 17, "bold")).pack(anchor="w")
-        tk.Label(lateral, text="Tarros + camión lubricador", background=NAVY, foreground=ACENTO,
-                 font=(FUENTE, 9, "bold")).pack(anchor="w", padx=18, pady=(0, 14))
-        FranjaSeguridad(lateral, alto=6).pack(fill="x", pady=(0, 12))
+        tk.Label(t, text="CONTROL DE ACEITES", background=NAVY, foreground=TITULO_C,
+                 font=(FUENTE, 13, "bold")).pack(anchor="w")
+        tk.Label(t, text="Tarros · camión lubricador · cuadratura en litros", background=NAVY, foreground=ACENTO,
+                 font=(FUENTE, 8)).pack(anchor="w")
+        tk.Frame(barra, background=tema.BORDE, width=1).pack(side="left", fill="y", pady=16)
 
+        pest = tk.Frame(barra, background=NAVY)
+        pest.pack(side="left", fill="y", padx=(14, 0))
         self._nav = {}
         for clave, texto, ico in (("control", "Control semanal", "panel"), ("historial", "Historial", "historial"),
                                   ("config", "Configuración", "config"), ("ayuda", "Ayuda", "ayuda")):
-            self._nav[clave] = self._boton_nav(lateral, texto, ico, lambda c=clave: self.mostrar(c))
+            self._nav[clave] = self._boton_nav(pest, texto, ico, lambda c=clave: self.mostrar(c))
 
-        pie = tk.Frame(lateral, background=NAVY)
-        pie.pack(side="bottom", fill="x", padx=16, pady=14)
-        self.lbl_estado_lat = tk.Label(pie, text="", background=NAVY, foreground="#B9C4D3", font=(FUENTE, 8),
-                                       justify="left", anchor="w", wraplength=196)
-        self.lbl_estado_lat.pack(fill="x")
-        tk.Label(pie, text=f"Versión {__version__}", background=NAVY, foreground="#7F8DA1",
-                 font=(FUENTE, 8)).pack(anchor="w", pady=(6, 0))
+        der = tk.Frame(barra, background=NAVY)
+        der.pack(side="right", padx=18)
+        self.lbl_estado_lat = tk.Label(der, text="", background=NAVY, foreground=SUAVE, font=(FUENTE, 8),
+                                       justify="right", anchor="e")
+        self.lbl_estado_lat.pack(anchor="e")
+        tk.Label(der, text=f"v{__version__}", background=NAVY, foreground=tema.GRIS,
+                 font=(FUENTE, 8, "bold")).pack(anchor="e")
+        FranjaSeguridad(self, alto=3).pack(side="top", fill="x")
 
-        derecha = tk.Frame(self, background=FONDO)
-        derecha.pack(side="left", fill="both", expand=True)
-        FranjaSeguridad(derecha, alto=8).pack(fill="x")
-        self.contenedor = tk.Frame(derecha, background=FONDO)
+        self.contenedor = tk.Frame(self, background=FONDO)
         self.contenedor.pack(fill="both", expand=True)
         self.paginas = {
             "control": self._pagina_control(),
@@ -162,32 +191,33 @@ class App(tk.Tk):
         }
 
     def _boton_nav(self, master, texto, ico, cmd):
+        """Pestaña superior: ícono + texto, subrayado ámbar cuando está activa."""
         f = tk.Frame(master, background=NAVY, cursor="hand2")
-        f.pack(fill="x", padx=10, pady=2)
-        img = tema.icono(self, ico, 18, "#C9D3E0")
-        img_a = tema.icono(self, ico, 18, ACENTO)
-        barra = tk.Frame(f, background=NAVY, width=4)
-        barra.pack(side="left", fill="y")
-        li = tk.Label(f, image=img, background=NAVY)
-        li.pack(side="left", padx=(10, 8), pady=9)
-        lt = tk.Label(f, text=texto, background=NAVY, foreground="#E3E9F1", font=(FUENTE, 10), anchor="w")
-        lt.pack(side="left", fill="x", expand=True)
-        widgets = (f, li, lt)
+        f.pack(side="left", fill="y")
+        img = tema.icono(self, ico, 16, SUAVE)
+        img_a = tema.icono(self, ico, 16, ACENTO)
+        cuerpo = tk.Frame(f, background=NAVY)
+        cuerpo.pack(fill="both", expand=True, padx=16)
+        li = tk.Label(cuerpo, image=img, background=NAVY)
+        li.pack(side="left", padx=(0, 7))
+        lt = tk.Label(cuerpo, text=texto, background=NAVY, foreground=SUAVE, font=(FUENTE, 10))
+        lt.pack(side="left")
+        linea = tk.Frame(f, background=NAVY, height=3)
+        linea.pack(side="bottom", fill="x")
+        widgets = (f, cuerpo, li, lt)
 
         def fijar(activo):
-            bg = tema.NAVY2 if activo else NAVY
             for w in widgets:
-                w.configure(background=bg)
-            barra.configure(background=ACENTO if activo else bg)
+                w.configure(background=NAVY_HOVER if activo else NAVY)
+            linea.configure(background=ACENTO if activo else NAVY)
             li.configure(image=img_a if activo else img)
-            lt.configure(font=(FUENTE, 10, "bold" if activo else "normal"))
+            lt.configure(foreground=TITULO_C if activo else SUAVE, font=(FUENTE, 10, "bold" if activo else "normal"))
             f.activo = activo
 
         def hover(on):
             if not getattr(f, "activo", False):
-                for w in widgets:
-                    w.configure(background=NAVY_HOVER if on else NAVY)
-                barra.configure(background=NAVY_HOVER if on else NAVY)
+                lt.configure(foreground=TEXTO if on else SUAVE)
+                linea.configure(background=tema.GRIS if on else NAVY)
 
         for w in widgets:
             w.bind("<Button-1>", lambda e: cmd())
@@ -207,7 +237,7 @@ class App(tk.Tk):
     def _titulo_pagina(self, master, titulo, nota):
         cab = tk.Frame(master, background=FONDO)
         cab.pack(fill="x", padx=22, pady=(14, 8))
-        tk.Label(cab, text=titulo, background=FONDO, foreground=NAVY, font=(FUENTE, 17, "bold")).pack(anchor="w")
+        tk.Label(cab, text=titulo, background=FONDO, foreground=TITULO_C, font=(FUENTE, 17, "bold")).pack(anchor="w")
         lb = tk.Label(cab, text=nota, background=FONDO, foreground=SUAVE, font=(FUENTE, 9))
         lb.pack(anchor="w")
         return cab, lb
@@ -252,7 +282,7 @@ class App(tk.Tk):
         ind = tk.Frame(p, background=FONDO)
         ind.pack(fill="x", padx=22, pady=(0, 10))
         self.ind = {}
-        for i, (k, tit, ico, col) in enumerate((("ini", "Stock inicial", "tarro", tema.NAVY2),
+        for i, (k, tit, ico, col) in enumerate((("ini", "Stock inicial", "tarro", tema.SERIE_INI),
                                                 ("rec", "Recibido semana", "recepcion", tema.MORADO),
                                                 ("con", "Consumo semana", "consumo", AZUL),
                                                 ("calc", "Sobrante calculado", "gota", tema.AMBAR),
@@ -266,7 +296,7 @@ class App(tk.Tk):
         # tabla
         t = tarjeta(p, "Detalle por aceite (litros)", "gota")
         t.pack(fill="x", padx=22, pady=(0, 10))
-        cols = [("ac", "Aceite", 170, "w"), ("pt", "N° parte", 62, "center"),
+        cols = [("ac", "Aceite", 190, "w"), ("pt", "Código", 62, "center"),
                 ("it", "Inicial\ntarros", 52, "center"), ("ic", "Inicial\ncamión", 62, "e"),
                 ("itot", "Inicial\ntotal", 66, "e"), ("rc", "Recib.\ntarros", 52, "center"),
                 ("co", "Consumo\nsemana", 64, "e"),
@@ -302,14 +332,14 @@ class App(tk.Tk):
         self.txt.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         self.txt.pack(fill="both", expand=True)
-        for tag, col in (("error", ROJO), ("aviso", "#C46A10"), ("info", AZUL), ("ok", VERDE)):
+        for tag, col in (("error", ROJO), ("aviso", tema.ACENTO), ("info", AZUL), ("ok", VERDE)):
             self.txt.tag_configure(tag, foreground=col)
-        self.txt.tag_configure("tit", font=(FUENTE, 9, "bold"), foreground=NAVY)
-        self.txt.tag_configure("concl", font=(FUENTE, 10, "bold"), foreground=NAVY, spacing3=6)
+        self.txt.tag_configure("tit", font=(FUENTE, 9, "bold"), foreground=TITULO_C)
+        self.txt.tag_configure("concl", font=(FUENTE, 10, "bold"), foreground=TITULO_C, spacing3=6)
         return pag
 
     def _boton_accion(self, master, texto, ico, estilo, cmd, grande=True):
-        img = tema.icono(self, ico, 20 if grande else 16, "#FFFFFF")
+        img = tema.icono(self, ico, 20 if grande else 16, NAVY if estilo == "Naranja" else "#FFFFFF")
         b = ttk.Button(master, text=" " + texto, image=img, compound="left",
                        style=f"{estilo}{'Grande' if grande else ''}.TButton", command=cmd)
         b.image = img
@@ -358,8 +388,9 @@ class App(tk.Tk):
         info.append(f"Stock entregado: {ent.get('turno')} · {fmt_fecha(ent.get('fecha'))} · Responsable: "
                     f"{ent.get('persona') or '—'}" if ent else "Stock entregado: pendiente")
         self.lbl_info.configure(text="   |   ".join(info))
-        lat += f"\nControl N° {ctl.get('id')} · {ini.get('turno')}\n" + \
-            ("Cerrado" if et >= 3 else "Abierto: " + ("falta consumos" if et == 1 else "falta stock entregado"))
+        lat = (f"Control N° {ctl.get('id')} · {ini.get('turno')} · " +
+               ("cerrado" if et >= 3 else "abierto, " + ("falta consumos" if et == 1 else "falta stock entregado")) +
+               f"   ·   {lat}")
         self.lbl_estado_lat.configure(text=lat)
 
         self.ind["ini"].fijar(fmt_l(t["ini"]), f"{t['ini_tarros']} tarros + {fmt_l(t['ini_camion'])} camión")
@@ -680,14 +711,14 @@ class App(tk.Tk):
         self.lbl_origen.pack(fill="x", pady=(0, 6))
         bar = tk.Frame(c.inner, background=TARJETA)
         bar.pack(fill="x", pady=(0, 8))
-        ttk.Button(bar, text="Leer desde Planificación PM", style="Naranja.TButton",
+        ttk.Button(bar, text="Leer desde Planificación PM (.xlsm / .db)", style="Naranja.TButton",
                    command=self._cfg_importar).pack(side="left")
         ttk.Button(bar, text="Activar / desactivar", style="Azul.TButton", command=self._cfg_toggle).pack(side="left",
                                                                                                          padx=6)
         ttk.Button(bar, text="Editar nombre", style="Gris.TButton", command=self._cfg_editar).pack(side="left")
         ttk.Button(bar, text="Agregar", style="Verde.TButton", command=self._cfg_agregar).pack(side="left", padx=6)
         ttk.Button(bar, text="Quitar", style="Rojo.TButton", command=self._cfg_quitar).pack(side="left")
-        self.tv_cat = tabla(c.inner, [("parte", "N° parte", 90, "center"), ("nombre", "Lubricante", 320, "w"),
+        self.tv_cat = tabla(c.inner, [("parte", "Código compra", 100, "center"), ("nombre", "Lubricante", 320, "w"),
                                       ("act", "Activo", 70, "center")], alto=12)
         self.tv_cat.marco.pack(fill="both", expand=True)
         self.tv_cat.bind("<Double-1>", lambda e: self._cfg_editar())
@@ -702,7 +733,7 @@ class App(tk.Tk):
         self.v_lt = tk.StringVar()
         ttk.Entry(f, textvariable=self.v_lt, width=10, justify="right").grid(row=0, column=1, padx=8)
         ttk.Button(f, text="Guardar", style="Verde.TButton", command=self._cfg_lt).grid(row=0, column=2)
-        tk.Label(d.inner, text="Base de datos de este programa:", background=TARJETA, foreground=NAVY,
+        tk.Label(d.inner, text="Base de datos de este programa:", background=TARJETA, foreground=TITULO_C,
                  font=(FUENTE, 9, "bold")).pack(anchor="w", pady=(18, 0))
         self.lbl_ruta = tk.Label(d.inner, text="", background=TARJETA, foreground=SUAVE, font=(FUENTE, 8),
                                  justify="left", anchor="w", wraplength=380)
@@ -741,16 +772,17 @@ class App(tk.Tk):
     def _cfg_importar(self):
         ruta = buscar_db_pm()
         if ruta and not messagebox.askyesno(TITULO, f"Se encontró la base de Planificación PM:\n{ruta}\n\n"
-                                                    "¿Leer los aceites desde ella? (Elija «No» para buscar otro archivo.)",
-                                            parent=self):
+                                                    "¿Leer los aceites desde ella? (Elija «No» para elegir el Excel "
+                                                    "Planificacion_PM u otro archivo.)", parent=self):
             ruta = None
         if not ruta:
-            ruta = filedialog.askopenfilename(parent=self, title="Base de datos de Planificación PM",
-                                              filetypes=[("Planificación PM", "*.db"), ("Todos", "*.*")])
+            ruta = filedialog.askopenfilename(parent=self, title="Excel o base de datos de Planificación PM",
+                                              filetypes=[("Planificación PM (Excel o base)", "*.xlsm *.xlsx *.db"),
+                                                         ("Todos", "*.*")])
             if not ruta:
                 return
         try:
-            nuevo = leer_catalogo_pm(ruta)
+            nuevo = leer_catalogo(ruta)
         except ValueError as ex:
             messagebox.showerror(TITULO, str(ex), parent=self)
             return
@@ -779,13 +811,13 @@ class App(tk.Tk):
             self._cfg_set(cat)
 
     def _cfg_agregar(self):
-        p = simpledialog.askstring(TITULO, "N° de parte del aceite:", parent=self)
+        p = simpledialog.askstring(TITULO, "Código de compra del aceite (ej.: LL-0008):", parent=self)
         if not p or not p.strip():
             return
         p = p.strip().upper()
         cat = self.repo.catalogo()
         if any(a["parte"] == p for a in cat):
-            messagebox.showwarning(TITULO, f"El N° de parte {p} ya existe.", parent=self)
+            messagebox.showwarning(TITULO, f"El código {p} ya existe.", parent=self)
             return
         n = simpledialog.askstring(TITULO, f"Nombre del lubricante {p}:", parent=self) or f"Lubricante {p}"
         cat.append({"parte": p, "nombre": n.strip(), "activo": True})
@@ -826,7 +858,7 @@ class App(tk.Tk):
         txt.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         txt.pack(fill="both", expand=True)
-        txt.tag_configure("tit", font=(FUENTE, 11, "bold"), foreground=NAVY, spacing1=8)
+        txt.tag_configure("tit", font=(FUENTE, 11, "bold"), foreground=TITULO_C, spacing1=8)
         for linea in AYUDA.splitlines():
             txt.insert("end", linea + "\n", "tit" if linea and linea == linea.upper() and linea[0].isalpha()
                        or (linea[:1].isdigit() and linea[1:3] == ". ") else ())

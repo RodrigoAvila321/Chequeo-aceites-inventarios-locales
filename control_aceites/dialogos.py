@@ -7,7 +7,7 @@ from tkinter import messagebox, ttk
 
 from . import TITULO, tema
 from .calculo import TURNOS, calcular_sobrante, etiqueta
-from .tema import (ACENTO, AZUL, BORDE, FUENTE, MORADO, NAVY, ROJO, SUAVE, TARJETA, TEXTO, VERDE)
+from .tema import (ACENTO, AZUL, BORDE, FUENTE, MORADO, NAVY, ROJO, SUAVE, TARJETA, TEXTO, TITULO_C, VERDE)
 from .util import fmt_fecha, fmt_l, fmt_num, parse_entero, parse_fecha, parse_num
 from .widgets import Desplazable, FranjaSeguridad, tabla
 
@@ -142,7 +142,7 @@ class FormularioStock(Dialogo):
         ttk.Entry(cab, textvariable=self.v_obs).grid(row=1, column=1, columnspan=5, sticky="ew", pady=3)
         cab.columnconfigure(5, weight=1)
 
-        cols = ("Aceite", "N° parte", f"Tarros llenos\n(× {fmt_num(lt, 0)} L)", "Litros en\ntarros",
+        cols = ("Aceite", "Código", f"Tarros llenos\n(× {fmt_num(lt, 0)} L)", "Litros en\ntarros",
                 "Camión lubricador\n(litros)", "Total\n(litros)")
         tabla_f = tk.Frame(self.cuerpo, background=TARJETA, highlightthickness=1, highlightbackground=BORDE)
         tabla_f.pack(fill="both", expand=True)
@@ -150,7 +150,7 @@ class FormularioStock(Dialogo):
         enc.pack(fill="x")
         anchos = (34, 10, 14, 12, 16, 12)
         for i, (t, a) in enumerate(zip(cols, anchos)):
-            tk.Label(enc, text=t, background=tema.NAVY2, foreground="#FFFFFF", font=(FUENTE, 9, "bold"),
+            tk.Label(enc, text=t, background=tema.NAVY2, foreground=tema.ACENTO, font=(FUENTE, 9, "bold"),
                      width=a, justify="center").grid(row=0, column=i, padx=2, pady=4, sticky="ew")
             enc.columnconfigure(i, weight=3 if i == 0 else 1)
         desp = Desplazable(tabla_f)
@@ -158,7 +158,7 @@ class FormularioStock(Dialogo):
         cuerpo = desp.interior
         self.filas = []
         for r, a in enumerate(aceites):
-            bg = TARJETA if r % 2 == 0 else "#F7F9FB"
+            bg = TARJETA if r % 2 == 0 else tema.ALT
             it = items.get(a["parte"], {})
             vt = tk.StringVar(value=str(it.get("tarros", 0)))
             vc = tk.StringVar(value=fmt_num(it.get("camion", 0), 2) if it else "0")
@@ -172,16 +172,16 @@ class FormularioStock(Dialogo):
             lt_lbl.grid(row=r, column=3, sticky="ew", padx=2, ipady=6)
             en = ttk.Entry(cuerpo, textvariable=vc, width=12, justify="right")
             en.grid(row=r, column=4, padx=8, pady=3)
-            tot = tk.Label(cuerpo, text="", background=bg, width=12, foreground=NAVY, font=(FUENTE, 9, "bold"))
+            tot = tk.Label(cuerpo, text="", background=bg, width=12, foreground=TITULO_C, font=(FUENTE, 9, "bold"))
             tot.grid(row=r, column=5, sticky="ew", padx=2, ipady=6)
             for v in (vt, vc):
                 v.trace_add("write", lambda *_: self._actualizar())
             self.filas.append(dict(aceite=a, vt=vt, vc=vc, lt_lbl=lt_lbl, tot=tot, sp=sp))
         for i, a in enumerate(anchos):
             cuerpo.columnconfigure(i, weight=3 if i == 0 else 1)
-        pie = tk.Frame(tabla_f, background="#E8EDF3")
+        pie = tk.Frame(tabla_f, background=tema.TOTAL_BG)
         pie.pack(fill="x")
-        self.lbl_total = tk.Label(pie, text="", background="#E8EDF3", foreground=NAVY, font=(FUENTE, 10, "bold"),
+        self.lbl_total = tk.Label(pie, text="", background=tema.TOTAL_BG, foreground=TITULO_C, font=(FUENTE, 10, "bold"),
                                   anchor="e")
         self.lbl_total.pack(fill="x", padx=12, pady=6)
 
@@ -203,7 +203,7 @@ class FormularioStock(Dialogo):
             ok = t is not None and c is not None and t >= 0 and c >= 0
             if ok:
                 f["lt_lbl"].configure(text=fmt_num(t * self.lt, 0))
-                f["tot"].configure(text=fmt_num(t * self.lt + c, 1), foreground=NAVY)
+                f["tot"].configure(text=fmt_num(t * self.lt + c, 1), foreground=TITULO_C)
                 tt += t * self.lt
                 tc += c
                 nt += t
@@ -273,7 +273,7 @@ class FormularioConsumos(Dialogo):
         enc = tk.Frame(tabla_f, background=tema.NAVY2)
         enc.pack(fill="x")
         for i, (t, a) in enumerate(zip(cols, anchos)):
-            tk.Label(enc, text=t, background=tema.NAVY2, foreground="#FFFFFF", font=(FUENTE, 9, "bold"),
+            tk.Label(enc, text=t, background=tema.NAVY2, foreground=tema.ACENTO, font=(FUENTE, 9, "bold"),
                      width=a, justify="center").grid(row=0, column=i, padx=2, pady=4, sticky="ew")
             enc.columnconfigure(i, weight=1)
         desp = Desplazable(tabla_f)
@@ -281,7 +281,7 @@ class FormularioConsumos(Dialogo):
         cuerpo = desp.interior
         self.filas = []
         for r, a in enumerate(aceites):
-            bg = TARJETA if r % 2 == 0 else "#F7F9FB"
+            bg = TARJETA if r % 2 == 0 else tema.ALT
             i0 = self.ini.get(a["parte"], {"tarros": 0, "camion": 0})
             it = items.get(a["parte"], {})
             vcons = tk.StringVar(value=fmt_num(it.get("consumo", 0), 2) if it else "0")
@@ -302,7 +302,7 @@ class FormularioConsumos(Dialogo):
             sp.grid(row=r, column=3, padx=6, pady=3)
             lbls = []
             for c, w in ((4, 10), (5, 13), (6, 12)):
-                lb = tk.Label(cuerpo, text="", background=bg, width=w, foreground=NAVY, font=(FUENTE, 9, "bold"))
+                lb = tk.Label(cuerpo, text="", background=bg, width=w, foreground=TITULO_C, font=(FUENTE, 9, "bold"))
                 lb.grid(row=r, column=c, sticky="ew", padx=2, ipady=3)
                 lbls.append(lb)
             est = tk.Label(cuerpo, text="", background=bg, width=34, anchor="w", justify="left", wraplength=250,
@@ -313,9 +313,9 @@ class FormularioConsumos(Dialogo):
             self.filas.append(dict(aceite=a, ini=i0, rec=nrec, vcons=vcons, vrel=vrel, lbls=lbls, est=est, en=en))
         for i in range(len(cols)):
             cuerpo.columnconfigure(i, weight=1)
-        pie = tk.Frame(tabla_f, background="#E8EDF3")
+        pie = tk.Frame(tabla_f, background=tema.TOTAL_BG)
         pie.pack(fill="x")
-        self.lbl_total = tk.Label(pie, text="", background="#E8EDF3", foreground=NAVY, font=(FUENTE, 10, "bold"),
+        self.lbl_total = tk.Label(pie, text="", background=tema.TOTAL_BG, foreground=TITULO_C, font=(FUENTE, 10, "bold"),
                                   anchor="w", justify="left")
         self.lbl_total.pack(fill="x", padx=12, pady=6)
 
@@ -340,8 +340,8 @@ class FormularioConsumos(Dialogo):
                 continue
             c = calcular_sobrante(f["ini"]["tarros"], f["ini"]["camion"], cons, rel, self.lt, f["rec"])
             f["lbls"][0].configure(text=str(c["tarros"]))
-            f["lbls"][1].configure(text=fmt_num(c["camion"]), foreground=ROJO if c["camion"] < 0 else NAVY)
-            f["lbls"][2].configure(text=fmt_num(c["total"]), foreground=ROJO if c["total"] < 0 else NAVY)
+            f["lbls"][1].configure(text=fmt_num(c["camion"]), foreground=ROJO if c["camion"] < 0 else TITULO_C)
+            f["lbls"][2].configure(text=fmt_num(c["total"]), foreground=ROJO if c["total"] < 0 else TITULO_C)
             if c["avisos"]:
                 nivel = "error" if any(n == "error" for n, _ in c["avisos"]) else "aviso"
                 f["est"].configure(text=" ".join(t for _, t in c["avisos"]),
@@ -400,11 +400,11 @@ class VentanaSobrante(Dialogo):
         super().__init__(master, "Sobrante de aceite calculado",
                          "Stock inicial + aceite recibido − consumos de la semana, con los rellenos al camión "
                          "cuadrados en litros.",
-                         icono="gota", ancho=1000, alto=560)
+                         icono="gota", ancho=1060, alto=560)
         kp = tk.Frame(self.cuerpo, background=TARJETA)
         kp.pack(fill="x", pady=(0, 10))
         for i, (tit, val, det, col) in enumerate((
-                ("Stock inicial", fmt_l(t["ini"]), f"{t['ini_tarros']} tarros + {fmt_l(t['ini_camion'])} en camión", NAVY),
+                ("Stock inicial", fmt_l(t["ini"]), f"{t['ini_tarros']} tarros + {fmt_l(t['ini_camion'])} en camión", tema.SERIE_INI),
                 ("Recibido", fmt_l(t["recibido"], 0), f"{t['rec_tarros']} tarros en {len(res['recepciones'])} "
                                                          f"recepción(es)", MORADO),
                 ("Consumo semana", fmt_l(t["consumo"]), f"{t['rellenos']} tarros rellenados al camión", AZUL),
@@ -419,7 +419,7 @@ class VentanaSobrante(Dialogo):
             tk.Label(c, text=val, background=TARJETA, foreground=col, font=(FUENTE, 16, "bold")).pack(anchor="w", padx=10)
             tk.Label(c, text=det, background=TARJETA, foreground=SUAVE, font=(FUENTE, 8)).pack(anchor="w", padx=10, pady=(0, 8))
 
-        tv = tabla(self.cuerpo, [("ac", "Aceite", 210, "w"), ("ini", "Inicial (L)", 84, "e"),
+        tv = tabla(self.cuerpo, [("ac", "Aceite", 260, "w"), ("ini", "Inicial (L)", 84, "e"),
                                  ("rec", "Recibido (L)", 88, "e"), ("con", "Consumo (L)", 86, "e"), ("rel", "Rellenos", 70, "center"),
                                  ("tar", "Tarros", 60, "center"), ("cam", "Camión (L)", 90, "e"),
                                  ("sob", "Sobrante (L)", 100, "e"), ("eq", "≈ Tarros", 70, "e"),
@@ -467,9 +467,9 @@ class FormularioRecepcion(Dialogo):
         enc = tk.Frame(tabla_f, background=tema.NAVY2)
         enc.pack(fill="x")
         anchos = (34, 10, 16, 14)
-        for i, (t, a) in enumerate(zip(("Aceite", "N° parte", f"Tarros recibidos\n(× {fmt_num(lt, 0)} L)", "Litros"),
+        for i, (t, a) in enumerate(zip(("Aceite", "Código", f"Tarros recibidos\n(× {fmt_num(lt, 0)} L)", "Litros"),
                                         anchos)):
-            tk.Label(enc, text=t, background=tema.NAVY2, foreground="#FFFFFF", font=(FUENTE, 9, "bold"),
+            tk.Label(enc, text=t, background=tema.NAVY2, foreground=tema.ACENTO, font=(FUENTE, 9, "bold"),
                      width=a, justify="center").grid(row=0, column=i, padx=2, pady=4, sticky="ew")
             enc.columnconfigure(i, weight=3 if i == 0 else 1)
         desp = Desplazable(tabla_f)
@@ -477,7 +477,7 @@ class FormularioRecepcion(Dialogo):
         cuerpo = desp.interior
         self.filas = []
         for r, a in enumerate(aceites):
-            bg = TARJETA if r % 2 == 0 else "#F7F9FB"
+            bg = TARJETA if r % 2 == 0 else tema.ALT
             v = tk.StringVar(value="0")
             tk.Label(cuerpo, text=a["nombre"], background=bg, anchor="w", width=34, font=(FUENTE, 9, "bold"),
                      foreground=TEXTO).grid(row=r, column=0, sticky="ew", padx=2, ipady=6)
@@ -485,15 +485,15 @@ class FormularioRecepcion(Dialogo):
                 row=r, column=1, sticky="ew", padx=2, ipady=6)
             sp = ttk.Spinbox(cuerpo, from_=0, to=9999, increment=1, textvariable=v, width=8, justify="center")
             sp.grid(row=r, column=2, padx=8, pady=3)
-            lb = tk.Label(cuerpo, text="0", background=bg, width=14, foreground=NAVY, font=(FUENTE, 9, "bold"))
+            lb = tk.Label(cuerpo, text="0", background=bg, width=14, foreground=TITULO_C, font=(FUENTE, 9, "bold"))
             lb.grid(row=r, column=3, sticky="ew", padx=2, ipady=6)
             v.trace_add("write", lambda *_: self._actualizar())
             self.filas.append(dict(aceite=a, v=v, lb=lb, sp=sp))
         for i in range(len(anchos)):
             cuerpo.columnconfigure(i, weight=3 if i == 0 else 1)
-        pie = tk.Frame(tabla_f, background="#E8EDF3")
+        pie = tk.Frame(tabla_f, background=tema.TOTAL_BG)
         pie.pack(fill="x")
-        self.lbl_total = tk.Label(pie, text="", background="#E8EDF3", foreground=NAVY, font=(FUENTE, 10, "bold"),
+        self.lbl_total = tk.Label(pie, text="", background=tema.TOTAL_BG, foreground=TITULO_C, font=(FUENTE, 10, "bold"),
                                   anchor="e")
         self.lbl_total.pack(fill="x", padx=12, pady=6)
         self.boton("Guardar recepción", "Verde", self.guardar)
@@ -510,7 +510,7 @@ class FormularioRecepcion(Dialogo):
             if t is None or t < 0:
                 f["lb"].configure(text="revisar", foreground=ROJO)
             else:
-                f["lb"].configure(text=fmt_num(t * self.lt, 0), foreground=NAVY)
+                f["lb"].configure(text=fmt_num(t * self.lt, 0), foreground=TITULO_C)
                 n += t
         self.lbl_total.configure(text=f"Total recibido: {n} tarros = {fmt_l(n * self.lt, 0)}")
 
@@ -559,7 +559,7 @@ class VentanaRecepciones(Dialogo):
                                       ("tar", "Tarros", 60, "center"), ("lit", "Litros", 80, "e"),
                                       ("obs", "Observaciones", 180, "w")], alto=8)
         self.tv.marco.pack(fill="both", expand=True)
-        self.lbl = tk.Label(self.cuerpo, text="", background=TARJETA, foreground=NAVY, font=(FUENTE, 10, "bold"),
+        self.lbl = tk.Label(self.cuerpo, text="", background=TARJETA, foreground=TITULO_C, font=(FUENTE, 10, "bold"),
                             anchor="w")
         self.lbl.pack(fill="x", pady=(8, 0))
         self.boton("Cerrar", "Gris", self.cancelar)

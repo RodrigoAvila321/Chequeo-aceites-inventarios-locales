@@ -5,23 +5,30 @@ import tkinter as tk
 from tkinter import ttk
 
 from . import tema
-from .tema import (AMARILLO, AZUL, BORDE, FONDO, FUENTE, NAVY, NAVY2, SUAVE, TARJETA, TEXTO, VERDE, ACENTO)
+from .tema import (ACENTO, AZUL, BORDE, FONDO, FUENTE, NAVY, SUAVE, TARJETA, TEXTO, TITULO_C, VERDE)
 from .util import fmt_num
 
 
 class FranjaSeguridad(tk.Canvas):
-    """Franja diagonal amarilla/negra (señalética de mantención)."""
+    """Línea de acento color aceite: ámbar que se desvanece hacia la derecha (nivel de aceite)."""
 
-    def __init__(self, master, alto=8, **kw):
-        super().__init__(master, height=alto, highlightthickness=0, bd=0, background=AMARILLO, **kw)
+    def __init__(self, master, alto=4, **kw):
+        super().__init__(master, height=alto, highlightthickness=0, bd=0, background=NAVY, **kw)
         self.bind("<Configure>", self._dibujar)
 
     def _dibujar(self, _=None):
         self.delete("all")
         w, h = self.winfo_width(), int(self["height"])
-        paso = 18
-        for x in range(-h, w + paso, paso):
-            self.create_polygon(x, h, x + h, 0, x + h + paso / 2, 0, x + paso / 2, h, fill=NAVY, outline="")
+        if w < 2:
+            return
+        r0, g0, b0 = (int(ACENTO[i:i + 2], 16) for i in (1, 3, 5))
+        r1, g1, b1 = (int(NAVY[i:i + 2], 16) for i in (1, 3, 5))
+        pasos = 48
+        for k in range(pasos):
+            f = (k / (pasos - 1)) ** 1.6
+            col = f"#{int(r0 + (r1 - r0) * f):02X}{int(g0 + (g1 - g0) * f):02X}{int(b0 + (b1 - b0) * f):02X}"
+            x0, x1 = w * k / pasos, w * (k + 1) / pasos + 1
+            self.create_rectangle(x0, 0, x1, h, fill=col, outline="")
 
 
 class Pasos(tk.Canvas):
@@ -50,11 +57,11 @@ class Pasos(tk.Canvas):
         for i, (x, nom) in enumerate(zip(xs, self.ETAPAS)):
             hecho = i < self.actual
             activo = i == self.actual
-            fill = VERDE if hecho else (ACENTO if activo else "#E6EBF1")
-            self.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline="")
+            fill = VERDE if hecho else (ACENTO if activo else tema.TARJETA2)
+            self.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline=BORDE if not (hecho or activo) else "")
             self.create_text(x, y, text="✔" if hecho else str(i + 1),
-                             fill="#FFFFFF" if (hecho or activo) else SUAVE, font=(FUENTE, 10, "bold"))
-            self.create_text(x, y + r + 14, text=nom, fill=NAVY if (hecho or activo) else SUAVE,
+                             fill="#FFFFFF" if hecho else (NAVY if activo else SUAVE), font=(FUENTE, 10, "bold"))
+            self.create_text(x, y + r + 14, text=nom, fill=TITULO_C if (hecho or activo) else SUAVE,
                              font=(FUENTE, 9, "bold" if activo else "normal"))
 
 
@@ -72,20 +79,20 @@ class Indicador(tk.Frame):
         tk.Label(cab, image=self._img, background=TARJETA).pack(side="left")
         tk.Label(cab, text=titulo, background=TARJETA, foreground=SUAVE, font=(FUENTE, 9, "bold")).pack(
             side="left", padx=6)
-        self.valor = tk.Label(cuerpo, text="—", background=TARJETA, foreground=NAVY, font=(FUENTE, 17, "bold"),
+        self.valor = tk.Label(cuerpo, text="—", background=TARJETA, foreground=TITULO_C, font=(FUENTE, 17, "bold"),
                               anchor="w")
         self.valor.pack(fill="x")
         self.detalle = tk.Label(cuerpo, text="", background=TARJETA, foreground=SUAVE, font=(FUENTE, 8), anchor="w")
         self.detalle.pack(fill="x")
 
     def fijar(self, valor: str, detalle: str = "", color: str | None = None):
-        self.valor.configure(text=valor, foreground=color or NAVY)
+        self.valor.configure(text=valor, foreground=color or TITULO_C)
         self.detalle.configure(text=detalle)
 
 
 class GraficoLitros(tk.Canvas):
     """Barras por aceite: stock inicial, sobrante calculado y stock entregado (litros)."""
-    SERIES = (("Stock inicial", NAVY2), ("Sobrante calculado", tema.AMBAR), ("Stock entregado", VERDE))
+    SERIES = (("Stock inicial", tema.SERIE_INI), ("Sobrante calculado", tema.AMBAR), ("Stock entregado", VERDE))
 
     def __init__(self, master, **kw):
         super().__init__(master, height=210, highlightthickness=0, bd=0, background=TARJETA, **kw)
@@ -122,7 +129,7 @@ class GraficoLitros(tk.Canvas):
         for k in range(5):
             v = vmin + (vmax - vmin) * k / 4
             y = y0 - v * esc
-            self.create_line(izq, y, w - der, y, fill="#EEF1F5")
+            self.create_line(izq, y, w - der, y, fill=tema.BORDE)
             self.create_text(izq - 6, y, text=fmt_num(v, 0), anchor="e", fill=SUAVE, font=(FUENTE, 7))
         self.create_line(izq, y0, w - der, y0, fill=BORDE)
         n = len(self.datos)
@@ -184,8 +191,8 @@ def tabla(master, columnas, alto=10) -> ttk.Treeview:
     tv.marco = marco
     for est, col in tema.FONDO_ESTADO.items():
         tv.tag_configure(est, background=col)
-    tv.tag_configure("total", background="#E8EDF3", font=(FUENTE, 9, "bold"))
-    tv.tag_configure("par", background="#F7F9FB")
+    tv.tag_configure("total", background=tema.TOTAL_BG, font=(FUENTE, 9, "bold"))
+    tv.tag_configure("par", background=tema.ALT)
     return tv
 
 
@@ -196,11 +203,11 @@ def tarjeta(master, titulo: str | None = None, icono: str | None = None) -> tk.F
         cab = tk.Frame(ext, background=TARJETA)
         cab.pack(fill="x", padx=14, pady=(10, 2))
         if icono:
-            img = tema.icono(ext, icono, 16, NAVY)
+            img = tema.icono(ext, icono, 16, ACENTO)
             lb = tk.Label(cab, image=img, background=TARJETA)
             lb.image = img
             lb.pack(side="left", padx=(0, 6))
-        tk.Label(cab, text=titulo, background=TARJETA, foreground=NAVY, font=(FUENTE, 11, "bold")).pack(side="left")
+        tk.Label(cab, text=titulo, background=TARJETA, foreground=TITULO_C, font=(FUENTE, 11, "bold")).pack(side="left")
         ext.cab = cab
     inner = tk.Frame(ext, background=TARJETA)
     inner.pack(fill="both", expand=True, padx=14, pady=(4, 12))
@@ -209,4 +216,4 @@ def tarjeta(master, titulo: str | None = None, icono: str | None = None) -> tk.F
 
 
 __all__ = ["FranjaSeguridad", "Pasos", "Indicador", "GraficoLitros", "Desplazable", "tabla", "tarjeta",
-           "AZUL", "FONDO"]
+           "AZUL", "FONDO", "TEXTO"]

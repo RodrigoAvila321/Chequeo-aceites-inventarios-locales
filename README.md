@@ -5,9 +5,24 @@ cuadrar en litros el stock de lubricantes de un turno (tarros de 208 L + camión
 la semana, calcular el sobrante y compararlo con el stock que entrega el turno al finalizar. Detecta inconsistencias y
 genera un reporte PDF.
 
-Los aceites corresponden a los del proyecto **Planificación PM** (repositorio *Prueba*): N° de parte LL-0001 a LL-0007.
-Si en el computador existe la base de ese programa (`Documentos\PlanificacionPM\PlanificacionPM_datos.db`), los
-nombres de los lubricantes se leen desde ahí **en modo solo lectura**. Esa base nunca se modifica.
+Los aceites corresponden a los del proyecto **Planificación PM** (repositorio *Prueba*). LL-000X es el código de
+compra; los nombres vienen de la hoja Configuración del Excel `Planificacion_PM.xlsm` y van incluidos en el programa:
+
+| Código | Lubricante |
+|---|---|
+| LL-0001 | Mobil Delvac MX 15W40 |
+| LL-0002 | M. Lube HD Plus 75W90 |
+| LL-0003 | Mobil SHC Rarus 46 |
+| LL-0004 | Mobil DTE 10 Excel 46 |
+| LL-0005 | Mobil SHC Gear 320 |
+| LL-0006 | Mobil Almo 529 |
+| LL-0007 | Mobil Mining Coolant 50% |
+
+Si cambian, **Configuración > Leer desde Planificación PM** los actualiza desde el Excel (`.xlsm`) o desde la base
+`PlanificacionPM_datos.db`, **en modo solo lectura**: esos archivos nunca se modifican.
+
+Diseño propio «grafito + ámbar»: fondo oscuro tipo tablero de taller, acentos color aceite y navegación por pestañas
+superiores.
 
 ## Obtener el ejecutable
 
@@ -63,8 +78,8 @@ quedan en **Historial**, donde se pueden abrir, reimprimir o eliminar.
 - `Documentos\ControlAceites\ControlAceites_datos.db`. Si junto al `.exe` existe un `ControlAceites_datos.db`, se usa
   ese (modo portátil).
 - Los reportes se proponen en `Documentos\ControlAceites\Reportes`.
-- **Configuración:** leer aceites desde Planificación PM, activar o desactivar aceites, editar nombres, litros por
-  tarro y respaldo de la base de datos.
+- **Configuración:** leer aceites desde Planificación PM (`.xlsm` o `.db`), activar o desactivar aceites, editar
+  nombres, litros por tarro y respaldo de la base de datos.
 
 ## Estructura
 
